@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Plan de Entrenamiento Personalizado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --surface:#161616;
+    --surface-2:#1d1d1d;
+    --surface-3:#232323;
+    --border:#2b2b2b;
+    --border-soft:#1f1f1f;
+    --accent:#ff4426;
+    --accent-dim:#3a1810;
+    --accent-glow: rgba(255,68,38,0.35);
+    --lime:#cdfb3f;
+    --text:#f2f0ec;
+    --text-dim:#9a9a96;
+    --text-faint:#5e5e5b;
+    --white:#ffffff;
+
+    /* Alias de compatibilidad: la paleta original del documento (tonos cálidos
+       sobre papel claro) ahora resuelve hacia los tokens del nuevo dashboard
+       oscuro, para que todos los componentes existentes hereden la nueva
+       identidad visual sin tener que reescribir cada declaración de estilo. */
+    --ink: var(--text);
+    --ink-soft: var(--text-dim);
+    --paper: var(--bg);
+    --paper-2: var(--surface-2);
+    --line: var(--border);
+    --rust: var(--accent);
+    --rust-dark: var(--accent);
+    --sage: var(--lime);
+    --sage-dark: var(--lime);
+    --gold: var(--lime);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:var(--bg); min-height:100%; }
+  #app-root{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+    max-width: 100%;
+    min-height: 100vh;
+  }
+  .ff-display{ font-family: 'Barlow Condensed', 'Inter', sans-serif; text-transform:uppercase; letter-spacing:0.01em; }
+  .ff-mono{ font-family: 'JetBrains Mono', 'Courier New', monospace; letter-spacing: 0.04em; }
+  .ff-ui{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  button{ font-family: inherit; cursor:pointer; }
+  input, textarea, select{ font-family: inherit; }
+  input::placeholder, textarea::placeholder{ color: var(--text-faint); }
+
+  .scrollbox::-webkit-scrollbar{ height:6px; width:6px; }
+  .scrollbox::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
+
+  #boot-status{
+    position:fixed; inset:0; background:var(--bg); color:var(--text);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family: 'Inter', sans-serif; text-align:center; padding:24px; z-index:9999;
+  }
+  #boot-status.hidden{ display:none; }
+  #boot-spinner{
+    width:34px; height:34px; border:3px solid var(--border); border-top-color:var(--accent);
+    border-radius:50%; animation: spin 0.9s linear infinite; margin-bottom:16px;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  #boot-error{
+    max-width:480px; font-family: 'Inter', sans-serif;
+  }
+  #boot-error h2{ font-size:17px; margin:0 0 10px 0; color:var(--accent); }
+  #boot-error p{ font-size:14px; line-height:1.6; margin:0 0 8px 0; color: var(--text-dim); }
+  #boot-error code{
+    display:block; background:var(--surface); padding:10px; border-radius:8px; font-size:12px;
+    text-align:left; overflow-x:auto; margin-top:10px; white-space:pre-wrap; word-break:break-word;
+    border:1px solid var(--border); color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<div id="boot-status">
+  <div id="boot-spinner"></div>
+  <div id="boot-text" style="font-size:14px; color:#9a9a96;">Cargando el plan de entrenamiento…</div>
+</div>
+
+<div id="app-root"></div>
+
+<script>
+  // ============================================================
+  // CARGA ROBUSTA DE DEPENDENCIAS CON FALLBACK Y ERRORES VISIBLES
+  // ============================================================
+  // Si algo falla (sin internet, CDN bloqueado, error de JS), el usuario
+  // ve un mensaje claro en vez de una pantalla en blanco sin explicación.
+
+  var bootStatus = document.getElementById('boot-status');
+  var bootText = document.getElementById('boot-text');
+
+  function showBootError(title, message, detail){
+    bootStatus.innerHTML =
+      '<div id="boot-error">' +
+        '<h2>' + title + '</h2>' +
+        '<p>' + message + '</p>' +
+        (detail ? '<code>' + String(detail).replace(/</g,'&lt;') + '</code>' : '') +
+      '</div>';
+    bootStatus.classList.remove('hidden');
+  }
+
+  window.addEventListener('error', function(e){
+    // Captura cualquier error de script no atrapado y lo muestra en vez de dejar pantalla blanca
+    if (bootStatus && !bootStatus.classList.contains('hidden')) {
+      showBootError(
+        'No se pudo cargar el plan',
+        'Ocurrió un error al iniciar la aplicación. Si esto persiste, prueba abrir el archivo con otro navegador (Chrome o Safari) o revisa tu conexión a internet, ya que esta página necesita cargar algunas librerías la primera vez.',
+        (e && e.message) ? e.message : e
+      );
+    }
+  });
+
+  function loadScript(src, timeoutMs){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      var timer = setTimeout(function(){ reject(new Error('Tiempo de espera agotado cargando: ' + src)); }, timeoutMs || 12000);
+      s.onload = function(){ clearTimeout(timer); resolve(); };
+      s.onerror = function(){ clearTimeout(timer); reject(new Error('No se pudo cargar: ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadFirstAvailable(srcList, timeoutMs){
+    var i = 0;
+    function attempt(){
+      if (i >= srcList.length) return Promise.reject(new Error('Ninguna fuente disponible: ' + srcList.join(', ')));
+      var src = srcList[i++];
+      return loadScript(src, timeoutMs).catch(function(){ return attempt(); });
+    }
+    return attempt();
+  }
+
+  // Storage fallback: si window.storage no existe (uso fuera de Claude.ai,
+  // por ejemplo abierto como archivo HTML directamente en el celular),
+  // usamos localStorage. TODO queda envuelto en try/catch para que, si el
+  // navegador bloquea localStorage en contexto file://, la app siga
+  // funcionando en memoria en vez de romperse.
+  if (!window.storage) {
+    var memoryFallback = {};
+    var localStorageWorks = (function(){
+      try {
+        window.localStorage.setItem('__test__', '1');
+        window.localStorage.removeItem('__test__');
+        return true;
+      } catch(e){ return false; }
+    })();
+
+    window.storage = {
+      get: function(key){
+        return new Promise(function(resolve, reject){
+          try{
+            var raw = localStorageWorks ? window.localStorage.getItem(key) : (Object.prototype.hasOwnProperty.call(memoryFallback, key) ? memoryFallback[key] : null);
+            if (raw === null || raw === undefined) { reject(new Error('not found')); return; }
+            resolve({ key: key, value: raw, shared:false });
+          }catch(e){ reject(e); }
+        });
+      },
+      set: function(key, value){
+        return new Promise(function(resolve){
+          try{
+            if (localStorageWorks) { window.localStorage.setItem(key, value); }
+            else { memoryFallback[key] = value; }
+          }catch(e){ memoryFallback[key] = value; }
+          resolve({ key: key, value: value, shared:false });
+        });
+      },
+      delete: function(key){
+        return new Promise(function(resolve){
+          try{ if (localStorageWorks) window.localStorage.removeItem(key); }catch(e){}
+          delete memoryFallback[key];
+          resolve({ key: key, deleted:true, shared:false });
+        });
+      },
+      list: function(prefix){
+        return new Promise(function(resolve){
+          var keys = [];
+          try{
+            if (localStorageWorks) keys = Object.keys(window.localStorage);
+            else keys = Object.keys(memoryFallback);
+          }catch(e){ keys = Object.keys(memoryFallback); }
+          if (prefix) keys = keys.filter(function(k){ return k.indexOf(prefix) === 0; });
+          resolve({ keys: keys, prefix: prefix, shared:false });
+        });
+      }
+    };
+
+    if (!localStorageWorks) {
+      console.warn('localStorage no disponible: el progreso solo se guardará mientras la página esté abierta (no persistirá al cerrar).');
+    }
+  }
+
+  // Carga React, ReactDOM y Babel con fallback entre dos CDNs distintos
+  bootText.textContent = 'Cargando librerías necesarias…';
+  Promise.resolve()
+    .then(function(){
+      return loadFirstAvailable([
+        'https://unpkg.com/react@18/umd/react.production.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js'
+      ]);
+    })
+    .then(function(){
+      return loadFirstAvailable([
+        'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'
+      ]);
+    })
+    .then(function(){
+      return loadFirstAvailable([
+        'https://unpkg.com/@babel/standalone/babel.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js'
+      ], 20000);
+    })
+    .then(function(){
+      bootText.textContent = 'Preparando la interfaz…';
+      // Babel Standalone, una vez cargado, escanea automáticamente cualquier
+      // <script type="text/babel"> en la página y lo transpila + ejecuta.
+      // Cambiamos el type del script fuente de "text/plain" a "text/babel"
+      // y disparamos el escaneo manualmente para no depender del momento
+      // exacto en que el navegador parseó el DOM originalmente.
+      var sourceEl = document.getElementById('app-jsx-source');
+      sourceEl.type = 'text/babel';
+      Babel.transformScriptTags();
+      // Si todo fue bien, el propio render de React ocultará el boot-status.
+      // Como red de seguridad adicional, si en 4s no se ocultó, mostramos un aviso.
+      setTimeout(function(){
+        var el = document.getElementById('boot-status');
+        if (el && !el.classList.contains('hidden')) {
+          showBootError(
+            'La interfaz está tardando más de lo esperado',
+            'Puede que tu navegador esté bloqueando alguno de los scripts. Intenta recargar la página, o ábrela en Chrome o Safari si estás usando otro navegador.',
+            null
+          );
+        }
+      }, 6000);
+    })
+    .catch(function(err){
+      showBootError(
+        'No se pudo cargar el plan',
+        'Esta página necesita conexión a internet la primera vez para cargar las librerías de interfaz. Por favor verifica tu conexión e intenta de nuevo. Si el problema continúa, probemos abriéndolo desde otro navegador.',
+        err && err.message ? err.message : err
+      );
+    });
+</script>
+
+<script type="text/plain" id="app-jsx-source">
+
+const { useState, useEffect, useRef, useMemo } = React;
+
+/* ============================================================
+   DATA: 12-week program, 3 mesocycles, 4 sessions/week
+   ============================================================ */
+
+const MESOCYCLES = [
+  { id:'m1', name:'Bloque 1', subtitle:'Base aeróbica + hipertrofia', weeks:[1,2,3,4], focus:'Acumulación de volumen · RIR 3→2' },
+  { id:'m2', name:'Bloque 2', subtitle:'Intensificación', weeks:[5,6,7,8], focus:'Densidad y superseries · RIR 2→1' },
+  { id:'m3', name:'Bloque 3', subtitle:'Pico estético-fuerza', weeks:[9,10,11,12], focus:'Picos de esfuerzo · RIR 1→0, circuitos' },
+];
+
+// Helper to build a video field placeholder object
+const vid = () => ({ url: '' });
+
+// Each "exercise" has: name, sets, reps, intensity (RIR), rest, notes
+function buildSession(dayLabel, dayFocus, warmup, blockB, blockC, blockD){
+  return { dayLabel, dayFocus, warmup, blockB, blockC, blockD };
+}
+
+// ---------- WEEK TEMPLATES ----------
+// We define 3 base templates (one per mesociclo) then tweak RIR/notes per week via progression text.
+
+const WARMUP_GENERAL = [
+  'Movilidad de cadera 90/90 — 6 reps c/lado',
+  'Gato-camello — 8 reps',
+  'Puente de glúteo activación — 12 reps',
+  'Sentadilla con peso corporal — 10 reps',
+  'Círculos de hombro + banda face pull — 12 reps',
+];
+
+const WARMUP_CARDIO = [
+  'Marcha rápida o trote suave — 3 min',
+  'Movilidad de tobillo y cadera dinámica — 2 min',
+  'Skipping bajo + talones a glúteo — 1 min c/u',
+];
+
+// ---- MESOCICLO 1 (semanas 1-4): variantes nuevas vs. plan previo ----
+const M1_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (tren completo)',
+  blockB:[
+    { name:'Sentadilla búlgara c/mancuernas', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
+    { name:'Press banca c/barra', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'Remo en polea baja agarre neutro', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Zancada caminando c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'60 seg' },
+    { name:'Elevación lateral mancuerna', sets:3, reps:'12-15', rir:'RIR 1-2', rest:'45 seg' },
+    { name:'Abducción de cadera en máquina', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
+  ],
+};
+
+const M1_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + acondicionamiento metabólico',
+  blockB:[
+    { name:'Plancha frontal con toques de hombro', sets:3, reps:'30-40 seg', rir:'RIR 2', rest:'45 seg' },
+    { name:'Dead bug c/peso ligero', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'EMOM 14 min — Bloque metabólico', sets:1, reps:'Ver indicaciones', rir:'RPE 7-8', rest:'—',
+      notes:'Cada minuto, en este orden rotando: Min1 Remo en máquina 250m · Min2 Sentadilla goblet x12 · Min3 Push-ups x10 · Min4 Mountain climbers x20 · Min5 Burpee x6 (sustituible por step-up si necesita regresión) · Min6 descanso activo caminando. Repetir el ciclo 2 veces.' },
+  ],
+};
+
+const M1_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción',
+  blockB:[
+    { name:'Peso muerto rumano unilateral c/mancuerna', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
+    { name:'Jalón al pecho agarre amplio', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'Hip thrust c/barra', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Press militar con mancuernas sentada', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Curl femoral en máquina/banco', sets:3, reps:'12', rir:'RIR 1-2', rest:'45 seg' },
+    { name:'Face pull en polea', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
+  ],
+};
+
+const M1_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio LISS + movilidad',
+  blockB:[
+    { name:'Caminadora inclinada (LISS)', sets:1, reps:'30-40 min', rir:'RPE 4-5', rest:'—',
+      notes:'Inclinación 6-8%, ritmo conversacional (puedes hablar en frases cortas).' },
+  ],
+  blockC:[
+    { name:'Movilidad torácica + cadera (circuito libre)', sets:2, reps:'8-10 min total', rir:'RPE 2-3', rest:'—' },
+  ],
+};
+
+// ---- MESOCICLO 2 (semanas 5-8): superseries, mayor densidad ----
+const M2_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (superserie)',
+  blockB:[
+    { name:'Sentadilla frontal c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
+    { name:'Press inclinado c/mancuernas', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'SS A1: Step up c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'15 seg → enlazar con A2' },
+    { name:'SS A2: Remo mancuerna a un brazo', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
+    { name:'SS B1: Elevación lateral en polea', sets:3, reps:'12-15', rir:'RIR 1', rest:'15 seg → enlazar con B2' },
+    { name:'SS B2: Abducción de cadera de pie en polea', sets:3, reps:'12-15 c/lado', rir:'RIR 1', rest:'60 seg tras la pareja' },
+  ],
+};
+
+const M2_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + HIIT por intervalos',
+  blockB:[
+    { name:'Plancha lateral c/elevación de cadera', sets:3, reps:'10-12 c/lado', rir:'RIR 2', rest:'45 seg' },
+    { name:'Rueda abdominal o press pallof', sets:3, reps:'8-10', rir:'RIR 2', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'HIIT — Intervalos 40/20', sets:8, reps:'40 seg trabajo / 20 seg pausa', rir:'RPE 8-9', rest:'20 seg entre rondas',
+      notes:'Bici/Assault bike o sprint en caminadora. 8 rondas = 8 min totales. Progresar intensidad cada semana, no duración.' },
+  ],
+};
+
+const M2_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción (superserie)',
+  blockB:[
+    { name:'Peso muerto convencional c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
+    { name:'Dominadas asistidas o jalón supino', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'SS A1: Leg press pies altos', sets:3, reps:'10-12', rir:'RIR 1-2', rest:'15 seg → enlazar' },
+    { name:'SS A2: Push press c/mancuernas', sets:3, reps:'8-10', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
+    { name:'Curl femoral nórdico asistido o en máquina', sets:3, reps:'8-10', rir:'RIR 1', rest:'45 seg' },
+    { name:'Face pull + rotación externa banda', sets:3, reps:'15', rir:'RIR 1', rest:'45 seg' },
+  ],
+};
+
+const M2_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio ondulante + core',
+  blockB:[
+    { name:'Caminadora inclinada (LISS progresivo)', sets:1, reps:'35-45 min', rir:'RPE 5', rest:'—',
+      notes:'Subir inclinación o velocidad ligeramente respecto a Mesociclo 1.' },
+  ],
+  blockC:[
+    { name:'Circuito core (3 rondas, sin pausa entre ejercicios)', sets:3, reps:'12-15 c/u', rir:'RPE 6', rest:'60 seg entre rondas',
+      notes:'Dead bug, bird dog, plancha con toque de rodilla.' },
+  ],
+};
+
+// ---- MESOCICLO 3 (semanas 9-12): pico, EMOM/circuitos nuevos ----
+const M3_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Pico de fuerza inferior + empuje',
+  blockB:[
+    { name:'Sentadilla trasera c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+    { name:'Press banca c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+  ],
+  blockC:[
+    { name:'Zancada búlgara con salto (regresión: sin salto)', sets:3, reps:'6-8 c/lado', rir:'RIR 1', rest:'60 seg' },
+    { name:'Remo en máquina T-bar', sets:3, reps:'8-10', rir:'RIR 1', rest:'60 seg' },
+    { name:'Elevación lateral myo-reps', sets:3, reps:'12 + mini-series de 5', rir:'RIR 0-1', rest:'30 seg' },
+  ],
+};
+
+const M3_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + circuito "For Time"',
+  blockB:[
+    { name:'Plancha con arrastre de mancuerna', sets:3, reps:'8 c/lado', rir:'RIR 1', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'For Time — 4 rondas lo más rápido posible (técnica primero)', sets:4, reps:'Ver indicaciones', rir:'RPE 8-9', rest:'Cronometrar tiempo total',
+      notes:'Por ronda: Kettlebell swing x15 · Box step-over x10 · Push-up x10 · Assault bike 250m. Anotar el tiempo total cada semana para medir progreso.' },
+  ],
+};
+
+const M3_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Pico cadena posterior + tracción',
+  blockB:[
+    { name:'Peso muerto rumano c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+    { name:'Jalón al pecho agarre cerrado (pico)', sets:5, reps:'5-6', rir:'RIR 1', rest:'2 min' },
+  ],
+  blockC:[
+    { name:'Hip thrust a una pierna', sets:3, reps:'8-10 c/lado', rir:'RIR 1', rest:'60 seg' },
+    { name:'Push press c/mancuernas', sets:3, reps:'6-8', rir:'RIR 1', rest:'60 seg' },
+    { name:'Face pull + curl femoral (superserie final)', sets:3, reps:'12-15 c/u', rir:'RIR 0-1', rest:'45 seg' },
+  ],
+};
+
+const M3_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio pico + movilidad integral',
+  blockB:[
+    { name:'Caminadora inclinada (LISS pico)', sets:1, reps:'40-50 min', rir:'RPE 5-6', rest:'—' },
+  ],
+  blockC:[
+    { name:'HIIT corto opcional (si energía lo permite)', sets:6, reps:'30 seg fuerte / 30 seg suave', rir:'RPE 7', rest:'—',
+      notes:'Opcional según fatiga acumulada de la semana — escuchar al cuerpo en el cierre del mesociclo.' },
+  ],
+};
+
+const TEMPLATES = {
+  m1: [M1_DAY1, M1_DAY2, M1_DAY3, M1_DAY4],
+  m2: [M2_DAY1, M2_DAY2, M2_DAY3, M2_DAY4],
+  m3: [M3_DAY1, M3_DAY2, M3_DAY3, M3_DAY4],
+};
+
+const WEEK_PROGRESSION_NOTES = {
+  1: 'Semana de recalibración: usa cargas conservadoras (RIR 3-4) para grabar la técnica de los nuevos patrones (búlgara, RDL unilateral). No busques romper PRs.',
+  2: 'Si la técnica de semana 1 fue sólida, sube 2.5-5% de carga en los básicos manteniendo RIR 3.',
+  3: 'Doble progresión en accesorios: si llegaste al techo del rango de reps en las 3 series, sube peso la próxima semana y vuelve al rango bajo.',
+  4: 'Semana de consolidación — mismo peso que semana 3, pero bajamos a RIR 2 (un poco más de esfuerzo) antes de pasar de mesociclo.',
+  5: 'Nuevo bloque: las superseries reducen el descanso entre ejercicios pareados a 15 seg. Mantén técnica; si se degrada, alarga el descanso 10 seg.',
+  6: 'Sube carga en básicos 2.5-5% si la semana 5 se sintió en RIR 2-3. Mantén reps en superseries.',
+  7: 'Empuja a RIR 1-2 en accesorios. Si el HIIT de martes se sintió controlado, aumenta intensidad (no duración) del intervalo.',
+  8: 'Semana de consolidación del mesociclo: mismo peso que semana 7, foco en ejecutar cada repetición con control (tempo 2-0-1).',
+  9: 'Bloque de pico: bajamos repeticiones (5) y subimos intensidad relativa (RIR 1) en básicos. Las cargas pueden sentirse "pesadas mentalmente" — es esperado.',
+  10: 'Si el RIR real de semana 9 fue ≥2 (sobró margen), sube 2.5-5% en los básicos de pico.',
+  11: 'Penúltima semana: prioriza calidad técnica sobre cantidad. Si aparece fatiga acumulada alta, autoriza bajar 1 serie en accesorios.',
+  12: 'Semana de cierre y testeo: repite los mismos pesos de la semana 10-11 en los básicos para medir cuántas repeticiones extra logras a igual RIR — esa es tu métrica de progreso del trimestre.',
+};
+
+function getWeekMeso(week){
+  if(week<=4) return MESOCYCLES[0];
+  if(week<=8) return MESOCYCLES[1];
+  return MESOCYCLES[2];
+}
+
+function getWeekSessions(week){
+  const mesoId = getWeekMeso(week).id;
+  return TEMPLATES[mesoId];
+}
+
+/* ============================================================
+   STORAGE HELPERS
+   ============================================================ */
+
+const STORAGE_PREFIX = 'recomp12_';
+
+async function loadJSON(key, fallback){
+  try{
+    const res = await window.storage.get(STORAGE_PREFIX + key, false);
+    if(res && res.value) return JSON.parse(res.value);
+    return fallback;
+  }catch(e){
+    return fallback;
+  }
+}
+
+async function saveJSON(key, value){
+  try{
+    await window.storage.set(STORAGE_PREFIX + key, JSON.stringify(value), false);
+  }catch(e){
+    console.error('storage error', e);
+  }
+}
+
+/* ============================================================
+   SMALL UI PRIMITIVES
+   ============================================================ */
+
+function Pill({children, tone}){
+  const tones = {
+    default: { border:'var(--border)', color:'var(--text-dim)', bg:'transparent' },
+    accent: { border:'var(--accent)', color:'var(--accent)', bg:'var(--accent-dim)' },
+    lime: { border:'var(--lime)', color:'var(--lime)', bg:'rgba(205,251,63,0.08)' },
+  };
+  const t = tones[tone] || tones.default;
+  return (
+    <span style={{
+      display:'inline-block', padding:'4px 10px', borderRadius:5,
+      fontSize:11, fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.06em', fontWeight:600,
+      background: t.bg, color: t.color, border:'1px solid ' + t.border, textTransform:'uppercase'
+    }}>{children}</span>
+  );
+}
+
+function SectionLabel({children}){
+  return (
+    <div style={{
+      fontFamily:"'JetBrains Mono', monospace", fontSize:11, letterSpacing:'0.14em',
+      textTransform:'uppercase', color:'var(--text-faint)', marginBottom:8, fontWeight:600
+    }}>{children}</div>
+  );
+}
+
+/* ============================================================
+   VIDEO LINK FIELD (persisted)
+   ============================================================ */
+
+function VideoField({exerciseKey, videos, setVideos}){
+  const val = videos[exerciseKey] || '';
+  const [local, setLocal] = useState(val);
+  const [saved, setSaved] = useState(false);
+  const timeoutRef = useRef(null);
+
+  useEffect(()=>{ setLocal(val); }, [val]);
+
+  const commit = (v) => {
+    setVideos(prev => ({...prev, [exerciseKey]: v}));
+    setSaved(true);
+    if(timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(()=>setSaved(false), 1200);
+  };
+
+  return (
+    <div style={{display:'flex', alignItems:'center', gap:6, marginTop:8}}>
+      <input
+        type="text"
+        placeholder="Pegar link del video aquí..."
+        value={local}
+        onChange={e=>setLocal(e.target.value)}
+        onBlur={e=>commit(e.target.value)}
+        style={{
+          flex:1, minWidth:0, fontSize:12.5, padding:'7px 9px',
+          border:'1px solid var(--border)', borderRadius:6, background:'var(--surface-2)', color:'var(--text)'
+        }}
+      />
+      {local ? (
+        <a href={local.startsWith('http') ? local : 'https://'+local} target="_blank" rel="noopener noreferrer"
+          style={{
+            fontSize:11, fontFamily:"'JetBrains Mono', monospace", color:'var(--accent)',
+            textDecoration:'none', border:'1px solid var(--accent)', borderRadius:6, padding:'6px 9px',
+            whiteSpace:'nowrap', letterSpacing:'0.03em'
+          }}>▶ VER</a>
+      ) : null}
+      {saved && <span style={{fontSize:11, color:'var(--lime)'}}>✓</span>}
+    </div>
+  );
+}
+
+/* ============================================================
+   EXERCISE ROW + LOG (persisted per week/day/exercise)
+   ============================================================ */
+
+function ExerciseCard({ex, dayKey, idx, logData, setLogData, videos, setVideos}){
+  const safeName = ex.name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
+  const exerciseKey = `${dayKey}__ex${idx}__${safeName}`;
+  const logKey = `${dayKey}__log${idx}`;
+  const entry = logData[logKey] || { sets:[], comment:'' };
+
+  const numSets = typeof ex.sets === 'number' ? ex.sets : 1;
+  const setsArr = entry.sets.length === numSets ? entry.sets : Array.from({length:numSets}, (_,i)=> entry.sets[i] || {kg:'', reps:''});
+
+  const updateSet = (i, field, value) => {
+    const newSets = setsArr.map((s,si)=> si===i ? {...s, [field]: value} : s);
+    setLogData(prev => ({...prev, [logKey]: {...entry, sets:newSets}}));
+  };
+
+  const updateComment = (value) => {
+    setLogData(prev => ({...prev, [logKey]: {...entry, comment:value}}));
+  };
+
+  return (
+    <div style={{
+      background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10,
+      padding:'14px 16px', marginBottom:10
+    }}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8}}>
+        <div style={{fontWeight:700, fontSize:15.5, color:'var(--text)', flex:'1 1 auto', minWidth:180}}>{ex.name}</div>
+        <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+          <Pill>{ex.sets} {ex.sets===1?'bloque':'series'}</Pill>
+          <Pill>{ex.reps}</Pill>
+          <Pill tone="accent">{ex.rir}</Pill>
+        </div>
+      </div>
+      <div style={{fontSize:12.5, color:'var(--text-dim)', marginTop:6}}>Descanso: {ex.rest}</div>
+      {ex.notes && (
+        <div style={{
+          fontSize:12.5, color:'var(--text)', marginTop:8, padding:'9px 11px',
+          background:'var(--surface-2)', borderRadius:7, borderLeft:'3px solid var(--lime)'
+        }}>{ex.notes}</div>
+      )}
+
+      <VideoField exerciseKey={exerciseKey} videos={videos} setVideos={setVideos} />
+
+      {/* LOG TABLE */}
+      <div style={{marginTop:14}}>
+        <SectionLabel>Tu registro</SectionLabel>
+        <div className="scrollbox" style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', minWidth:280}}>
+            <thead>
+              <tr style={{fontSize:11, color:'var(--text-faint)', textAlign:'left'}}>
+                <th style={{padding:'4px 6px', fontWeight:600}}>Serie</th>
+                <th style={{padding:'4px 6px', fontWeight:600}}>Kg</th>
+                <th style={{padding:'4px 6px', fontWeight:600}}>Reps logradas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {setsArr.map((s, i)=> (
+                <tr key={i} style={{borderTop:'1px solid var(--border-soft)'}}>
+                  <td style={{padding:'6px 6px', fontSize:13, fontFamily:"'JetBrains Mono', monospace", color:'var(--text-dim)'}}>#{i+1}</td>
+                  <td style={{padding:'6px 6px'}}>
+                    <input type="text" inputMode="decimal" placeholder="—" value={s.kg}
+                      onChange={e=>updateSet(i,'kg',e.target.value)}
+                      style={{width:60, padding:'6px 7px', fontSize:13, border:'1px solid var(--border)', borderRadius:6, background:'var(--surface-2)', color:'var(--text)'}} />
+                  </td>
+                  <td style={{padding:'6px 6px'}}>
+                    <input type="text" inputMode="numeric" placeholder="—" value={s.reps}
+                      onChange={e=>updateSet(i,'reps',e.target.value)}
+                      style={{width:70, padding:'6px 7px', fontSize:13, border:'1px solid var(--border)', borderRadius:6, background:'var(--surface-2)', color:'var(--text)'}} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <textarea
+          placeholder="Comentarios (sensación, dolor, energía, técnica...)"
+          value={entry.comment}
+          onChange={e=>updateComment(e.target.value)}
+          style={{
+            width:'100%', marginTop:8, fontSize:12.5, padding:'9px', minHeight:44,
+            border:'1px solid var(--border)', borderRadius:7, background:'var(--surface-2)', color:'var(--text)', resize:'vertical'
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SESSION BLOCK (Fase A-D)
+   ============================================================ */
+
+function SessionView({week, dayIndex, session, logData, setLogData, videos, setVideos, sessionDone, toggleDone}){
+  const dayKey = `w${week}_d${dayIndex}`;
+  const isCardioDay = dayIndex === 3; // Día 4 siempre cardio LISS
+  const warmupList = isCardioDay ? WARMUP_CARDIO : WARMUP_GENERAL;
+  const doneKey = `${dayKey}__done`;
+  const isDone = !!sessionDone[doneKey];
+
+  return (
+    <div>
+      <div style={{display:'flex', justifyContent:'flex-end', marginBottom:10}}>
+        <Pill tone="accent">{isCardioDay ? 'Cardio' : 'Fuerza'}</Pill>
+      </div>
+
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:14, marginBottom:16}}>
+        <div className="ff-display" style={{fontSize:26, fontWeight:700, lineHeight:1.1, flex:'1 1 auto'}}>{session.dayFocus}</div>
+        <button
+          onClick={()=>toggleDone(doneKey)}
+          style={{
+            fontSize:12.5, padding:'9px 16px', borderRadius:6, border:'1px solid var(--lime)',
+            background: isDone ? 'var(--lime)' : 'transparent', color: isDone ? '#0a0a0a' : 'var(--lime)',
+            fontWeight:700, fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.04em', textTransform:'uppercase',
+            whiteSpace:'nowrap'
+          }}>{isDone ? '✓ Completada' : 'Marcar completada'}</button>
+      </div>
+
+      <div style={{
+        background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10,
+        padding:'14px 16px', marginBottom:20
+      }}>
+        <span style={{color:'var(--lime)', fontWeight:700}}>Nota del coach:</span>{' '}
+        <span style={{color:'var(--text)'}}>Semana {week}/12 · {getWeekMeso(week).subtitle}. {isCardioDay ? 'Respeta el ritmo indicado de RPE — no es un día para ir al límite.' : 'Registra tus cargas en cada serie para poder medir tu progreso real semana a semana.'}</span>
+      </div>
+
+      {/* FASE A */}
+      <div style={{marginBottom:18}}>
+        <SectionLabel>Fase A — Calentamiento dinámico (5-8 min)</SectionLabel>
+        <ul style={{margin:'6px 0 0 0', paddingLeft:18, fontSize:13.5, lineHeight:1.6, color:'var(--text-dim)'}}>
+          {warmupList.map((w,i)=>(<li key={i}>{w}</li>))}
+        </ul>
+      </div>
+
+      {/* FASE B */}
+      <div style={{marginBottom:18}}>
+        <SectionLabel>Fase B — {isCardioDay ? 'Bloque cardiovascular principal' : 'Fuerza / Hipertrofia principal'}</SectionLabel>
+        {session.blockB.map((ex,i)=>(
+          <ExerciseCard key={i} ex={ex} dayKey={dayKey+'_B'} idx={i} logData={logData} setLogData={setLogData} videos={videos} setVideos={setVideos} />
+        ))}
+      </div>
+
+      {/* FASE C */}
+      {session.blockC && session.blockC.length>0 && (
+        <div style={{marginBottom:18}}>
+          <SectionLabel>{isCardioDay ? 'Fase C — Complemento / movilidad' : 'Fase C — Hipertrofia accesoria'}</SectionLabel>
+          {session.blockC.map((ex,i)=>(
+            <ExerciseCard key={i} ex={ex} dayKey={dayKey+'_C'} idx={i} logData={logData} setLogData={setLogData} videos={videos} setVideos={setVideos} />
+          ))}
+        </div>
+      )}
+
+      {/* FASE D */}
+      <div style={{
+        marginBottom:6, padding:'12px 14px', background:'var(--surface)', borderRadius:8,
+        fontSize:12.5, color:'var(--text-dim)', borderLeft:'3px solid var(--accent)'
+      }}>
+        <strong style={{color:'var(--text)'}}>Fase D — Cardio opcional de cierre:</strong> si terminaste con energía y tiempo (5-10 min), suma caminata inclinada suave. No es obligatorio — el objetivo del día ya se cumplió arriba.
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   WEEK VIEW (4 days as sub-tabs + progression note)
+   ============================================================ */
+
+function WeekView({week, logData, setLogData, videos, setVideos, sessionDone, toggleDone}){
+  const sessions = getWeekSessions(week);
+  const [activeDay, setActiveDay] = useState(0);
+  const meso = getWeekMeso(week);
+
+  return (
+    <div>
+      <div style={{
+        display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14
+      }}>
+        <div className="ff-display" style={{fontSize:22, fontWeight:700}}>Semana {week}</div>
+        <div className="ff-mono" style={{fontSize:11, color:'var(--text-faint)'}}>SEMANAS {meso.weeks[0]}–{meso.weeks[meso.weeks.length-1]}</div>
+      </div>
+
+      <div style={{
+        background:'var(--surface)', borderLeft:'3px solid var(--accent)', borderRadius:8,
+        padding:'14px 16px', marginBottom:18
+      }}>
+        <div className="ff-mono" style={{fontSize:12, color:'var(--accent)', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>
+          {meso.name.toUpperCase()}: {meso.subtitle.toUpperCase()}
+        </div>
+        <div style={{fontSize:14.5, color:'var(--text)'}}>{meso.focus}</div>
+      </div>
+
+      <div style={{
+        display:'flex', gap:8, marginBottom:18, overflowX:'auto', paddingBottom:2
+      }} className="scrollbox">
+        {sessions.map((s,i)=>(
+          <button key={i} onClick={()=>setActiveDay(i)}
+            style={{
+              padding:'9px 16px', borderRadius:7, whiteSpace:'nowrap', fontSize:13, fontWeight:600,
+              display:'flex', alignItems:'center', gap:7,
+              border: activeDay===i ? '1px solid var(--accent)' : '1px solid var(--border)',
+              background: activeDay===i ? 'var(--accent)' : 'var(--surface)',
+              color: activeDay===i ? '#fff' : 'var(--text-dim)'
+            }}>
+            <span style={{
+              width:6, height:6, borderRadius:'50%',
+              background: activeDay===i ? '#fff' : 'var(--text-faint)'
+            }}></span>
+            {s.dayLabel}
+          </button>
+        ))}
+      </div>
+
+      <SessionView
+        week={week} dayIndex={activeDay} session={sessions[activeDay]}
+        logData={logData} setLogData={setLogData} videos={videos} setVideos={setVideos}
+        sessionDone={sessionDone} toggleDone={toggleDone}
+      />
+
+      <div style={{
+        marginTop:22, padding:'14px 16px', background:'var(--surface)', border:'1px dashed var(--border)',
+        borderRadius:10
+      }}>
+        <SectionLabel>Progresión semanal — sobrecarga progresiva</SectionLabel>
+        <p style={{fontSize:13.5, lineHeight:1.6, margin:0, color:'var(--text-dim)'}}>{WEEK_PROGRESSION_NOTES[week]}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   NUTRITION TAB
+   ============================================================ */
+
+function NutritionTab({planStart, setPlanStart}){
+  const [openSection, setOpenSection] = useState('macros');
+
+  const Section = ({id, title, children}) => {
+    const open = openSection === id;
+    return (
+      <div style={{marginBottom:10, border:'1px solid var(--border)', borderRadius:10, background:'var(--surface)', overflow:'hidden'}}>
+        <button onClick={()=>setOpenSection(open?'':id)}
+          style={{
+            width:'100%', textAlign:'left', padding:'14px 16px', background:'transparent', border:'none',
+            display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:15, fontWeight:700, color:'var(--text)'
+          }}>
+          <span>{title}</span>
+          <span style={{color:'var(--accent)', fontSize:18, fontFamily:"'JetBrains Mono', monospace"}}>{open ? '−' : '+'}</span>
+        </button>
+        {open && <div style={{padding:'0 16px 16px 16px', fontSize:13.5, lineHeight:1.7, color:'var(--text-dim)'}}>{children}</div>}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{marginBottom:18, padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10}}>
+        <SectionLabel>Configuración del plan</SectionLabel>
+        <label style={{fontSize:12.5, color:'var(--text-dim)', display:'block', marginBottom:6}}>Fecha de inicio del plan (para calcular el rango de 12 semanas que se muestra arriba)</label>
+        <input
+          type="date"
+          value={planStart || ''}
+          onChange={e=>setPlanStart(e.target.value)}
+          style={{
+            padding:'8px 10px', fontSize:13.5, border:'1px solid var(--border)', borderRadius:6,
+            background:'var(--surface-2)', color:'var(--text)'
+          }}
+        />
+      </div>
+
+      <div style={{
+        background:'var(--lime)', color:'#0a0a0a', borderRadius:12, padding:'20px 18px', marginBottom:18
+      }}>
+        <div className="ff-display" style={{fontSize:19, fontWeight:800, marginBottom:6}}>Tu alimentación es el otro 70% del resultado</div>
+        <p style={{fontSize:13.5, margin:0, lineHeight:1.6, opacity:0.85}}>
+          No existe rutina de entrenamiento, sin importar lo perfecta que sea, que compense una alimentación que no sostiene tu energía y tu recuperación.
+          Esta guía no es una dieta rígida: es un mapa para que tomes mejores decisiones la mayoría de las veces. El progreso real se construye en la consistencia de las semanas, no en la perfección de un solo día.
+        </p>
+      </div>
+
+      <Section id="macros" title="🍽️ Cómo gestionar tus macronutrientes">
+        <p>Tu objetivo es <strong>recomposición corporal</strong>: perder grasa y ganar/mantener músculo a la vez. Esto se logra con un <strong>déficit calórico leve-moderado</strong> (no agresivo) combinado con una <strong>proteína alta</strong> que proteja tu masa muscular durante el déficit.</p>
+        <table style={{width:'100%', borderCollapse:'collapse', marginTop:10, fontSize:13}}>
+          <thead>
+            <tr style={{background:'var(--paper-2)'}}>
+              <th style={{padding:'8px', textAlign:'left', border:'1px solid var(--border)'}}>Macronutriente</th>
+              <th style={{padding:'8px', textAlign:'left', border:'1px solid var(--border)'}}>Rango orientativo</th>
+              <th style={{padding:'8px', textAlign:'left', border:'1px solid var(--border)'}}>Por qué</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}><strong>Proteína</strong></td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>1.8 - 2.2 g por kg de peso corporal/día</td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>Es la prioridad #1 en recomposición: preserva músculo y da saciedad.</td>
+            </tr>
+            <tr>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}><strong>Grasas</strong></td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>0.8 - 1 g por kg de peso corporal/día</td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>Soporte hormonal — nunca deben bajar de este mínimo.</td>
+            </tr>
+            <tr>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}><strong>Carbohidratos</strong></td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>El resto de tus calorías totales</td>
+              <td style={{padding:'8px', border:'1px solid var(--border)'}}>Combustible para entrenar fuerte — se ajustan según energía y rendimiento.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style={{marginTop:10}}><strong>Cómo aplicarlo en la práctica:</strong> no necesitas pesar cada gramo de comida de por vida. Una guía simple: en cada comida principal, llena 1/4 a 1/3 del plato con una fuente de proteína (del tamaño de tu palma aproximadamente), añade vegetales abundantes, y completa con una porción de carbohidrato según tu nivel de actividad ese día (más carbo en días de entrenamiento de fuerza, algo menos en días de descanso).</p>
+      </Section>
+
+      <Section id="platos" title="🥗 Ideas de platos por comida">
+        <p><strong>Desayunos:</strong></p>
+        <ul style={{marginTop:4}}>
+          <li>Huevos revueltos (2-3) + avena con fruta + un puñado de frutos secos</li>
+          <li>Yogur griego natural + granola casera + frutos rojos + semillas de chía</li>
+          <li>Tostadas integrales + palta + huevo pochado + tomate</li>
+        </ul>
+        <p><strong>Almuerzos / cenas:</strong></p>
+        <ul style={{marginTop:4}}>
+          <li>Pollo a la plancha + arroz integral o quinoa + ensalada variada con aceite de oliva</li>
+          <li>Salmón al horno + batata asada + brócoli al vapor</li>
+          <li>Carne magra salteada + vegetales salteados (wok) + arroz</li>
+          <li>Lentejas o garbanzos guisados + verduras + un toque de queso fresco</li>
+          <li>Tortilla de claras con espinaca y champiñones + ensalada de garbanzos</li>
+        </ul>
+        <p><strong>Colaciones (si las necesitas entre comidas):</strong></p>
+        <ul style={{marginTop:4}}>
+          <li>Fruta + un puñado de almendras</li>
+          <li>Yogur proteico + canela</li>
+          <li>Hummus + bastones de zanahoria/pepino</li>
+          <li>Batido de proteína + plátano (ideal post-entrenamiento)</li>
+        </ul>
+      </Section>
+
+      <Section id="timing" title="⏱️ Timing de comidas y entrenamiento">
+        <ul>
+          <li><strong>Antes de entrenar (1-2h):</strong> una comida con carbohidratos de fácil digestión + algo de proteína te da energía sin pesadez (ej. tostada con huevo, o fruta con yogur).</li>
+          <li><strong>Después de entrenar (dentro de 1-2h):</strong> prioriza proteína de calidad — es la ventana donde tu cuerpo mejor reconstruye el músculo trabajado.</li>
+          <li><strong>Hidratación:</strong> 2-2.5 litros de agua al día como base, sumando más en días de cardio intenso o calor. La sed ya es una señal tardía — no esperes a sentirla.</li>
+        </ul>
+      </Section>
+
+      <Section id="mitos" title="🚫 Mitos que vamos a dejar atrás">
+        <ul>
+          <li><strong>"Sudar mucho = quemar más grasa":</strong> el sudor es termorregulación, no indica gasto calórico ni quema de grasa localizada.</li>
+          <li><strong>"Las grasas engordan más que nada":</strong> lo que determina la ganancia o pérdida de peso es el balance calórico total, no un macronutriente aislado.</li>
+          <li><strong>"Comer de noche engorda":</strong> lo relevante es el total del día, no la hora del reloj.</li>
+          <li><strong>"Hay que eliminar grupos de alimentos completos":</strong> la sostenibilidad a 12 semanas (y a largo plazo) le gana siempre a la restricción extrema.</li>
+        </ul>
+      </Section>
+
+      <Section id="mentalidad" title="💛 Una nota para los días difíciles">
+        <p>Vas a tener comidas que no estaban "en el plan", semanas donde el hambre se siente más intensa, y días donde simplemente no tienes ganas de cocinar saludable. Eso es parte normal del proceso, no un fracaso.</p>
+        <p>Lo que construye el resultado de estos 3 meses no es ningún día perfecto aislado — es el promedio de tus decisiones a lo largo de las 12 semanas. Una comida fuera del plan no borra el progreso de la semana. Vuelve a tu siguiente comida, no esperes "al lunes". Confía en el proceso: tu entrenador está diseñando esto para que funcione incluso con tu vida real, no en un escenario ideal de laboratorio.</p>
+      </Section>
+
+      <Section id="comousar" title="📋 Cómo usar esta herramienta">
+        <ul style={{margin:0, paddingLeft:18}}>
+          <li>En la pestaña <strong>"Plan"</strong>, elige el bloque de semana (S1 a S12) en curso.</li>
+          <li>Dentro de cada semana, navega entre los días de entrenamiento.</li>
+          <li>Registra kg y repeticiones logradas en cada serie — todo se guarda automáticamente en este dispositivo.</li>
+          <li>Pega el link de video de cada ejercicio si tu entrenador te lo comparte.</li>
+          <li>Revisa <strong>"Stats"</strong> para ver tu avance general y por bloque.</li>
+        </ul>
+      </Section>
+
+      <Section id="exportar" title="📤 Cómo enviarle tu progreso a tu entrenador">
+        <p>Todo lo que registras (kg, repeticiones, comentarios, sesiones completadas) queda guardado <strong>solo en este dispositivo</strong> — tu entrenador no lo ve automáticamente. Para compartirlo:</p>
+        <ul style={{marginTop:6}}>
+          <li>Arriba en el encabezado, toca <strong>"⬇ Exportar progreso"</strong>.</li>
+          <li>Se descargará un archivo <code style={{background:'var(--surface-2)', padding:'2px 6px', borderRadius:4, fontSize:12}}>.json</code> con todo tu registro.</li>
+          <li>Envíaselo a tu entrenador por WhatsApp, mail o como prefieran — es un archivo pequeño de texto.</li>
+        </ul>
+        <p style={{marginTop:8}}>Te recomendamos hacer esto cada 1-2 semanas, así tu entrenador puede ir ajustando el plan con datos reales de tu progreso.</p>
+      </Section>
+    </div>
+  );
+}
+
+/* ============================================================
+   ERROR BOUNDARY — evita pantalla en blanco si algo falla en el render
+   ============================================================ */
+
+class ErrorBoundary extends React.Component {
+  constructor(props){
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error){
+    return { hasError: true, error: error };
+  }
+  componentDidCatch(error, info){
+    console.error('Error capturado por ErrorBoundary:', error, info);
+  }
+  render(){
+    if (this.state.hasError) {
+      return (
+        <div style={{padding:'30px 20px', fontFamily:"'Inter', sans-serif", color:'var(--text)', background:'var(--bg)', minHeight:'100vh'}}>
+          <h2 style={{color:'var(--accent)', fontSize:18}}>Algo no cargó correctamente</h2>
+          <p style={{fontSize:14, lineHeight:1.6, color:'var(--text-dim)'}}>
+            Hubo un problema mostrando esta sección del plan. Intenta recargar la página.
+            Si el problema continúa, avísale a tu entrenador con el siguiente detalle:
+          </p>
+          <code style={{display:'block', background:'var(--surface)', border:'1px solid var(--border)', padding:10, borderRadius:8, fontSize:12, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'var(--text-dim)'}}>
+            {this.state.error ? String(this.state.error.message || this.state.error) : 'Error desconocido'}
+          </code>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ============================================================
+   PROGRESS BAR — segmented, one block per week
+   ============================================================ */
+
+function ProgressBar({completedWeeks, totalWeeks}){
+  return (
+    <div style={{display:'flex', gap:4}}>
+      {Array.from({length:totalWeeks}, (_,i)=>i+1).map(w=>(
+        <div key={w} style={{
+          flex:1, height:5, borderRadius:2,
+          background: w<=completedWeeks ? 'var(--accent)' : 'var(--surface-3)'
+        }}></div>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   STATS TAB — resumen de progreso registrado
+   ============================================================ */
+
+function StatsTab({sessionDone, logData}){
+  const totalSessions = useMemo(()=>{
+    let total = 0;
+    for(let w=1; w<=12; w++){ total += getWeekSessions(w).length; }
+    return total;
+  }, []);
+  const doneCount = Object.values(sessionDone).filter(Boolean).length;
+  const pct = totalSessions ? Math.round((doneCount/totalSessions)*100) : 0;
+
+  const setsLogged = Object.values(logData).reduce((acc, entry) => {
+    if (!entry || !entry.sets) return acc;
+    return acc + entry.sets.filter(s => s.kg || s.reps).length;
+  }, 0);
+
+  return (
+    <div>
+      <SectionLabel>Resumen general</SectionLabel>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:22}}>
+        <div style={{background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'16px'}}>
+          <div className="ff-display" style={{fontSize:32, fontWeight:800, color:'var(--accent)', lineHeight:1}}>{doneCount}</div>
+          <div style={{fontSize:12, color:'var(--text-dim)', marginTop:4}}>de {totalSessions} sesiones completadas</div>
+        </div>
+        <div style={{background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'16px'}}>
+          <div className="ff-display" style={{fontSize:32, fontWeight:800, color:'var(--lime)', lineHeight:1}}>{pct}%</div>
+          <div style={{fontSize:12, color:'var(--text-dim)', marginTop:4}}>del plan total avanzado</div>
+        </div>
+        <div style={{background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'16px', gridColumn:'1 / -1'}}>
+          <div className="ff-display" style={{fontSize:32, fontWeight:800, color:'var(--text)', lineHeight:1}}>{setsLogged}</div>
+          <div style={{fontSize:12, color:'var(--text-dim)', marginTop:4}}>series registradas con datos (kg / reps)</div>
+        </div>
+      </div>
+
+      <SectionLabel>Avance por bloque</SectionLabel>
+      <div style={{display:'flex', flexDirection:'column', gap:10, marginBottom:10}}>
+        {MESOCYCLES.map((m)=>{
+          const weeksInBlock = m.weeks;
+          const sessionsInBlock = weeksInBlock.reduce((acc, w)=> acc + getWeekSessions(w).length, 0);
+          const doneInBlock = weeksInBlock.reduce((acc, w)=>{
+            const numDays = getWeekSessions(w).length;
+            let c = 0;
+            for(let d=0; d<numDays; d++){ if(sessionDone[`w${w}_d${d}__done`]) c++; }
+            return acc + c;
+          }, 0);
+          const blockPct = Math.round((doneInBlock/sessionsInBlock)*100);
+          return (
+            <div key={m.id} style={{background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'14px 16px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:8}}>
+                <div style={{fontWeight:700, fontSize:14}}>{m.name} · {m.subtitle}</div>
+                <div className="ff-mono" style={{fontSize:12, color:'var(--text-dim)'}}>{doneInBlock}/{sessionsInBlock}</div>
+              </div>
+              <div style={{height:6, borderRadius:3, background:'var(--surface-3)', overflow:'hidden'}}>
+                <div style={{height:'100%', width: blockPct+'%', background:'var(--accent)', borderRadius:3}}></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{marginTop:18, padding:'14px 16px', background:'var(--surface)', border:'1px dashed var(--border)', borderRadius:10, fontSize:13, color:'var(--text-dim)', lineHeight:1.6}}>
+        Estas cifras reflejan lo que has marcado como completado y los datos que registraste en cada serie. Úsalas para ver tu constancia semana a semana, no como un juicio — lo que importa es la tendencia a lo largo de las 12 semanas.
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   MAIN APP
+   ============================================================ */
+
+function App(){
+  const [tab, setTab] = useState('plan');
+  const [week, setWeek] = useState(1);
+  const [logData, setLogData] = useState({});
+  const [videos, setVideos] = useState({});
+  const [sessionDone, setSessionDone] = useState({});
+  const [studentName, setStudentName] = useState('Romina Cardoso');
+  const [planStart, setPlanStart] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+
+  useEffect(()=>{
+    (async ()=>{
+      const [ld, vd, sd, name, start] = await Promise.all([
+        loadJSON('logData', {}),
+        loadJSON('videos', {}),
+        loadJSON('sessionDone', {}),
+        loadJSON('studentName', 'Romina Cardoso'),
+        loadJSON('planStart', ''),
+      ]);
+      setLogData(ld); setVideos(vd); setSessionDone(sd);
+      setStudentName(name); setPlanStart(start);
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(()=>{ if(loaded) saveJSON('logData', logData).catch(()=>setSaveError(true)); }, [logData, loaded]);
+  useEffect(()=>{ if(loaded) saveJSON('videos', videos).catch(()=>setSaveError(true)); }, [videos, loaded]);
+  useEffect(()=>{ if(loaded) saveJSON('sessionDone', sessionDone).catch(()=>setSaveError(true)); }, [sessionDone, loaded]);
+  useEffect(()=>{ if(loaded) saveJSON('studentName', studentName).catch(()=>setSaveError(true)); }, [studentName, loaded]);
+  useEffect(()=>{ if(loaded) saveJSON('planStart', planStart).catch(()=>setSaveError(true)); }, [planStart, loaded]);
+
+  const toggleDone = (key) => {
+    setSessionDone(prev => ({...prev, [key]: !prev[key]}));
+  };
+
+  const resetAll = () => {
+    const ok = window.confirm('Esto borrará todo el registro guardado (series, videos, sesiones completadas y nombre). ¿Seguro que quieres reiniciar los datos de este plan?');
+    if(!ok) return;
+    setLogData({}); setVideos({}); setSessionDone({}); setStudentName(''); setPlanStart('');
+  };
+
+  // ===== EXPORTAR / IMPORTAR PROGRESO =====
+  // Permite a la alumna descargar un archivo .json con todo su registro
+  // (series, comentarios, videos, sesiones completadas) para enviárselo a
+  // su entrenador, y a este último abrirlo en su propia copia del plan
+  // para hacer seguimiento sin depender de ver el celular de la alumna.
+
+  const exportProgress = () => {
+    const payload = {
+      app: 'plan-recomposicion-12-semanas',
+      exportedAt: new Date().toISOString(),
+      studentName: studentName || '',
+      planStart: planStart || '',
+      logData, videos, sessionDone,
+    };
+    try{
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (studentName || 'alumna').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const dateStr = new Date().toISOString().slice(0,10);
+      a.href = url;
+      a.download = `progreso-${safeName}-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    }catch(e){
+      window.alert('No se pudo generar el archivo de progreso en este navegador. Intenta desde Chrome o Safari.');
+    }
+  };
+
+  const fileInputRef = useRef(null);
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState('');
+
+  const triggerImport = () => {
+    setImportError(''); setImportSuccess('');
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo después
+    if (!file) return;
+    setImportError(''); setImportSuccess('');
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (!parsed || typeof parsed !== 'object' || !('logData' in parsed) || !('sessionDone' in parsed)) {
+          setImportError('Este archivo no tiene el formato esperado de un export de este plan.');
+          return;
+        }
+        const ok = window.confirm(
+          'Vas a reemplazar los datos actuales en pantalla con los del archivo' +
+          (parsed.studentName ? ` de "${parsed.studentName}"` : '') +
+          (parsed.exportedAt ? ` (exportado el ${new Date(parsed.exportedAt).toLocaleDateString('es-ES')})` : '') +
+          '. ¿Continuar?'
+        );
+        if (!ok) return;
+        setLogData(parsed.logData || {});
+        setVideos(parsed.videos || {});
+        setSessionDone(parsed.sessionDone || {});
+        if (parsed.studentName) setStudentName(parsed.studentName);
+        if (parsed.planStart) setPlanStart(parsed.planStart);
+        setImportSuccess('Progreso importado correctamente.');
+      } catch (err) {
+        setImportError('No se pudo leer el archivo. Asegúrate de que sea el .json exportado desde este mismo plan.');
+      }
+    };
+    reader.onerror = () => setImportError('No se pudo leer el archivo seleccionado.');
+    reader.readAsText(file);
+  };
+
+  // Semanas completadas = semanas donde todas las sesiones de esa semana están marcadas como hechas
+  const completedWeeks = useMemo(()=>{
+    let count = 0;
+    for(let w=1; w<=12; w++){
+      const numDays = getWeekSessions(w).length;
+      let allDone = true;
+      for(let d=0; d<numDays; d++){ if(!sessionDone[`w${w}_d${d}__done`]) { allDone = false; break; } }
+      if(allDone) count++; else break;
+    }
+    return count;
+  }, [sessionDone]);
+
+  const dateRangeLabel = useMemo(()=>{
+    if(!planStart) return 'Configura la fecha de inicio en "Guía"';
+    const start = new Date(planStart + 'T00:00:00');
+    if (isNaN(start.getTime())) return 'Fecha de inicio inválida';
+    const end = new Date(start);
+    end.setDate(end.getDate() + 12*7);
+    const fmt = (d) => d.toLocaleDateString('es-ES', { month:'short', year:'numeric' }).toUpperCase().replace('.', '');
+    return fmt(start) + ' → ' + fmt(end);
+  }, [planStart]);
+
+  const TABS = [
+    {id:'plan', label:'Plan'},
+    {id:'stats', label:'Stats'},
+    {id:'guia', label:'Guía'},
+  ];
+
+  return (
+    <div style={{minHeight:400}}>
+      {/* HEADER */}
+      <div style={{padding:'18px 18px 14px 18px', borderBottom:'1px solid var(--border)'}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:10}}>
+          <div style={{flex:'1 1 auto', minWidth:200}}>
+            <div className="ff-display" style={{fontSize:19, fontWeight:700, color:'var(--text)', display:'flex', flexWrap:'wrap', alignItems:'center', gap:8}}>
+              <span>PLAN PERSONALIZADO {studentName ? '–' : ''}</span>
+              {editingName ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={studentName}
+                  placeholder="NOMBRE DEL ALUMNO"
+                  onChange={e=>setStudentName(e.target.value)}
+                  onBlur={()=>setEditingName(false)}
+                  onKeyDown={e=>{ if(e.key==='Enter') setEditingName(false); }}
+                  className="ff-display"
+                  style={{
+                    fontSize:19, fontWeight:700, color:'var(--accent)', background:'var(--surface)',
+                    border:'1px solid var(--accent)', borderRadius:5, padding:'2px 8px', textTransform:'uppercase',
+                    minWidth:160
+                  }}
+                />
+              ) : (
+                <span onClick={()=>setEditingName(true)} style={{color:'var(--accent)', cursor:'pointer', borderBottom:'1px dashed var(--accent)'}}>
+                  {studentName ? studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE'}
+                </span>
+              )}
+            </div>
+            <div className="ff-mono" style={{fontSize:11, color:'var(--text-faint)', marginTop:6, letterSpacing:'0.08em'}}>
+              PLAN DE PREPARACIÓN · {dateRangeLabel}
+            </div>
+          </div>
+          <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+            <button onClick={exportProgress}
+              className="ff-mono"
+              style={{
+                fontSize:11, padding:'8px 12px', borderRadius:6, border:'1px solid var(--lime)',
+                background:'transparent', color:'var(--lime)', letterSpacing:'0.06em', whiteSpace:'nowrap'
+              }}>⬇ EXPORTAR PROGRESO</button>
+            <button onClick={triggerImport}
+              className="ff-mono"
+              style={{
+                fontSize:11, padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)',
+                background:'transparent', color:'var(--text-dim)', letterSpacing:'0.06em', whiteSpace:'nowrap'
+              }}>⬆ IMPORTAR</button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportFile}
+              style={{display:'none'}}
+            />
+            <button onClick={resetAll}
+              className="ff-mono"
+              style={{
+                fontSize:11, padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)',
+                background:'transparent', color:'var(--text-dim)', letterSpacing:'0.06em', whiteSpace:'nowrap'
+              }}>REINICIAR DATOS</button>
+          </div>
+        </div>
+
+        {(importError || importSuccess) && (
+          <div style={{
+            marginTop:10, padding:'9px 12px', borderRadius:7, fontSize:12.5,
+            background: importError ? 'var(--accent-dim)' : 'rgba(205,251,63,0.08)',
+            border: '1px solid ' + (importError ? 'var(--accent)' : 'var(--lime)'),
+            color: importError ? 'var(--accent)' : 'var(--lime)'
+          }}>
+            {importError || importSuccess}
+          </div>
+        )}
+
+        <div style={{marginTop:16}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6}}>
+            <div className="ff-mono" style={{fontSize:11, color:'var(--text-faint)', letterSpacing:'0.1em'}}>PROGRESO DEL PLAN</div>
+            <div className="ff-mono" style={{fontSize:13, fontWeight:700}}><span style={{color:'var(--lime)'}}>{completedWeeks}</span><span style={{color:'var(--text-faint)'}}> / 12 SEMANAS</span></div>
+          </div>
+          <ProgressBar completedWeeks={completedWeeks} totalWeeks={12} />
+        </div>
+
+        <div style={{display:'flex', gap:8, marginTop:18, flexWrap:'wrap'}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{
+                flex:'1 1 auto', minWidth:90, padding:'11px 16px', borderRadius:8, fontSize:14, fontWeight:600,
+                border: tab===t.id ? '1px solid var(--text)' : '1px solid var(--border)',
+                background: tab===t.id ? 'var(--text)' : 'var(--surface)',
+                color: tab===t.id ? '#0a0a0a' : 'var(--text-dim)'
+              }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:'20px 18px 28px 18px'}}>
+        {!loaded ? (
+          <div style={{textAlign:'center', padding:'40px 0', color:'var(--text-dim)'}}>Cargando tu progreso...</div>
+        ) : (
+          <>
+            {tab==='plan' && (
+              <div>
+                <SectionLabel>Bloques del plan</SectionLabel>
+                <div className="scrollbox" style={{display:'flex', gap:6, overflowX:'auto', marginBottom:18, paddingBottom:4}}>
+                  {Array.from({length:12}, (_,i)=>i+1).map(w=>(
+                    <button key={w} onClick={()=>setWeek(w)}
+                      className="ff-mono"
+                      style={{
+                        minWidth:44, padding:'9px 0', borderRadius:7, fontSize:13, fontWeight:700,
+                        border: week===w ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        background: week===w ? 'var(--accent)' : 'var(--surface)',
+                        color: week===w ? '#fff' : 'var(--text-dim)'
+                      }}>S{w}</button>
+                  ))}
+                </div>
+                <WeekView week={week} logData={logData} setLogData={setLogData} videos={videos} setVideos={setVideos} sessionDone={sessionDone} toggleDone={toggleDone} />
+              </div>
+            )}
+            {tab==='stats' && <StatsTab sessionDone={sessionDone} logData={logData} />}
+            {tab==='guia' && <NutritionTab planStart={planStart} setPlanStart={setPlanStart} />}
+          </>
+        )}
+        {saveError && (
+          <div style={{marginTop:14, fontSize:12, color:'var(--accent)'}}>
+            Hubo un problema guardando algunos datos. Tus últimos cambios podrían no haberse guardado — revisa tu conexión.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app-root')).render(
+  React.createElement(ErrorBoundary, null, React.createElement(App))
+);
+
+// Si llegamos aquí sin excepciones, el render fue exitoso: ocultamos el loader de arranque
+var __bootStatusEl = document.getElementById('boot-status');
+if (__bootStatusEl) { __bootStatusEl.classList.add('hidden'); }
+</script>
+</body>
+</html>
