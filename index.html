@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Plan Victoria — 12 Semanas</title>
+<title>Plan Online — Romina Cardoso</title>
 <style>
 :root{
   --bg:#0a0a0a; --surface:#161616; --surface2:#1d1d1d; --surface3:#232323;
@@ -195,7 +195,7 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
   <div id="header-top">
     <div style="flex:1 1 auto;min-width:200px;">
       <div class="display" style="font-size:19px;font-weight:700;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-        <span>PLAN PERSONALIZADO — <span style="color:var(--accent);">ROMINA CARDOSO</span></span>
+        <span>PLAN PERSONALIZADO</span>
         <span id="student-name-display" onclick="startEditName()"></span>
         <input id="student-name-input" type="text" placeholder="NOMBRE" onblur="commitName()" onkeydown="if(event.key==='Enter')commitName()"/>
       </div>
@@ -242,216 +242,255 @@ function storageSet(key, val) {
 }
 
 /* ============================================================
+   GITHUB VIDEOS — lee videos.json del repositorio y lo actualiza
+   El token se incrusta en el HTML — solo el coach tiene este archivo
+   ============================================================ */
+const GH_USER  = 'martinmamchur';
+const GH_REPO  = 'PlanOnline-Romina';
+const GH_FILE  = 'videos.json';
+const GH_TOKEN = 'PEGAR_TOKEN_AQUI'; // <-- pegá tu token acá antes de subir a GitHub
+
+async function ghGetVideos() {
+  try {
+    // Intentar leer videos.json del repositorio público (no requiere token)
+    const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+async function ghSaveVideos(videos) {
+  if (!GH_TOKEN || GH_TOKEN === 'PEGAR_TOKEN_AQUI') return false;
+  try {
+    const apiUrl = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
+    // Primero obtener el SHA actual del archivo (necesario para actualizarlo)
+    const headers = {
+      'Authorization': `token ${GH_TOKEN}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    };
+    let sha = null;
+    try {
+      const getRes = await fetch(apiUrl, { headers });
+      if (getRes.ok) { const data = await getRes.json(); sha = data.sha; }
+    } catch(e) {}
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(videos, null, 2))));
+    const body = { message: 'Actualizar videos', content, ...(sha ? { sha } : {}) };
+    const putRes = await fetch(apiUrl, { method: 'PUT', headers, body: JSON.stringify(body) });
+    return putRes.ok;
+  } catch(e) { return false; }
+}
+
+/* ============================================================
    PROGRAM DATA
    ============================================================ */
 const MESOCYCLES = [
-  { id:'m1', name:'Bloque 1', subtitle:'Reconstrucción técnica', weeks:[1,2,3,4], focus:'Patrones nuevos y base de volumen · RIR 3→2' },
-  { id:'m2', name:'Bloque 2', subtitle:'Intensificación', weeks:[5,6,7,8], focus:'Superseries y mayor densidad · RIR 2→1' },
-  { id:'m3', name:'Bloque 3', subtitle:'Pico estético-fuerza', weeks:[9,10,11,12], focus:'Myo-reps, drop sets y tempo · RIR 1→0' },
+  { id:'m1', name:'Bloque 1', subtitle:'Base aeróbica + hipertrofia', weeks:[1,2,3,4], focus:'Acumulación de volumen · RIR 3→2' },
+  { id:'m2', name:'Bloque 2', subtitle:'Intensificación', weeks:[5,6,7,8], focus:'Densidad y superseries · RIR 2→1' },
+  { id:'m3', name:'Bloque 3', subtitle:'Pico estético-fuerza', weeks:[9,10,11,12], focus:'Picos de esfuerzo · RIR 1→0, circuitos' },
 ];
 
-function ex(name, sets, reps, rir, rest, opts) {
-  return { name, sets, reps, rir, rest, ...(opts||{}) };
+// Helper to build a video field placeholder object
+const vid = () => ({ url: '' });
+
+// Each "exercise" has: name, sets, reps, intensity (RIR), rest, notes
+function buildSession(dayLabel, dayFocus, warmup, blockB, blockC, blockD){
+  return { dayLabel, dayFocus, warmup, blockB, blockC, blockD };
 }
 
-// ── BLOQUE 1 ──────────────────────────────────────────────
-const m1 = [
-  { // Lunes
-    dayLabel:'Lunes', dayFocus:'Glúteo + Femoral dominante',
-    blockB:[
-      ex('Peso muerto rumano c/barra',4,'8-10','RIR 3','2 min'),
-      ex('Hip thrust c/barra',4,'10-12','RIR 3','90 seg'),
-    ],
-    blockC:[
-      ex('Sentadilla búlgara c/mancuernas',3,'10-12 c/lado','RIR 2','75 seg',{kneeAlert:true}),
-      ex('Curl femoral acostado en máquina',3,'12','RIR 2','60 seg'),
-      ex('Patada de glúteo en polea',3,'15 c/lado','RIR 1-2','45 seg'),
-      ex('Gemelos de pie en máquina',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { // Martes
-    dayLabel:'Martes', dayType:'upper', dayFocus:'Tren superior — Empuje (Pecho + Hombro + Tríceps)',
-    blockB:[
-      ex('Press banca con mancuernas',4,'8-10','RIR 3','90 seg'),
-      ex('Press militar con mancuernas sentada',4,'10-12','RIR 3','90 seg'),
-    ],
-    blockC:[
-      ex('Aperturas en máquina (pec deck)',3,'12-15','RIR 2','60 seg'),
-      ex('Elevación lateral con mancuerna',3,'15','RIR 1-2','45 seg'),
-      ex('Extensión de tríceps en polea (cuerda)',3,'12-15','RIR 1-2','45 seg'),
-      ex('Face pull en polea',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { // Miércoles
-    dayLabel:'Miércoles', dayFocus:'Cuádriceps + Glúteo dominante',
-    blockB:[
-      ex('Sentadilla hack',4,'8-10','RIR 3','2 min'),
-      ex('Prensa de cuádriceps (pies bajos)',4,'10-12','RIR 3','90 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('Step up c/mancuernas',3,'10 c/lado','RIR 2','60 seg',{kneeAlert:true}),
-      ex('Extensión de cuádriceps en máquina',3,'12-15','RIR 1-2','60 seg'),
-      ex('Abducción de cadera en máquina',3,'15-20','RIR 1','45 seg'),
-      ex('Banco de aductores',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { // Jueves
-    dayLabel:'Jueves', dayType:'upper', dayFocus:'Tren superior — Tracción (Espalda + Bíceps)',
-    blockB:[
-      ex('Jalón al pecho agarre amplio',4,'8-10','RIR 3','90 seg'),
-      ex('Remo en máquina (pecho apoyado)',4,'10-12','RIR 3','90 seg'),
-    ],
-    blockC:[
-      ex('Remo bajo en polea',3,'12','RIR 2','60 seg'),
-      ex('Curl bíceps con barra',3,'10-12','RIR 1-2','45 seg'),
-      ex('Curl martillo con mancuernas',3,'12','RIR 1-2','45 seg'),
-      ex('Vuelos posteriores con mancuernas',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { // Viernes
-    dayLabel:'Viernes', dayFocus:'Pierna completa',
-    blockB:[
-      ex('Sentadilla sumo c/mancuerna',4,'10-12','RIR 3','90 seg'),
-      ex('Zancada caminando c/mancuernas',3,'10 c/lado','RIR 2','75 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('Puente de glúteo c/banda (pausa arriba)',3,'15','RIR 2','45 seg'),
-      ex('Curl femoral sentado en máquina',3,'12','RIR 1-2','60 seg'),
-      ex('Abducción de cadera en máquina',3,'15-20','RIR 1','45 seg'),
-      ex('Gemelos sentada en máquina',3,'15-20','RIR 1','45 seg'),
-    ],
-  },
+// ---------- WEEK TEMPLATES ----------
+// We define 3 base templates (one per mesociclo) then tweak RIR/notes per week via progression text.
+
+const WARMUP_GENERAL = [
+  'Movilidad de cadera 90/90 — 6 reps c/lado',
+  'Gato-camello — 8 reps',
+  'Puente de glúteo activación — 12 reps',
+  'Sentadilla con peso corporal — 10 reps',
+  'Círculos de hombro + banda face pull — 12 reps',
 ];
 
-// ── BLOQUE 2 ──────────────────────────────────────────────
-const m2 = [
-  { dayLabel:'Lunes', dayFocus:'Glúteo + Femoral dominante (superserie)',
-    blockB:[
-      ex('Peso muerto sumo c/barra',4,'6-8','RIR 2','2 min'),
-      ex('Hip thrust c/barra',4,'10','RIR 2','90 seg'),
-    ],
-    blockC:[
-      ex('SS A1: Curl femoral acostado en máquina',3,'12','RIR 1-2','15 seg → enlazar'),
-      ex('SS A2: Patada de glúteo en polea',3,'15 c/lado','RIR 1','60 seg tras la pareja'),
-      ex('Sentadilla búlgara c/mancuernas (tempo lento)',3,'10 c/lado','RIR 1-2','75 seg',{kneeAlert:true, notes:'Bajada de 3 segundos en cada repetición.'}),
-      ex('Gemelos de pie en máquina',3,'15-20','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Martes', dayType:'upper', dayFocus:'Tren superior — Empuje (superserie)',
-    blockB:[
-      ex('Press inclinado con mancuernas',4,'8-10','RIR 2','90 seg'),
-      ex('Press Arnold con mancuernas',4,'10','RIR 2','90 seg'),
-    ],
-    blockC:[
-      ex('SS A1: Aperturas en polea (cable fly)',3,'12-15','RIR 1','15 seg → enlazar'),
-      ex('SS A2: Elevación lateral en polea',3,'15','RIR 1','60 seg tras la pareja'),
-      ex('Press francés con barra Z',3,'10-12','RIR 1-2','60 seg'),
-      ex('Face pull en polea',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Miércoles', dayFocus:'Cuádriceps + Glúteo dominante (superserie)',
-    blockB:[
-      ex('Sentadilla Smith',4,'6-8','RIR 2','2 min'),
-      ex('Prensa de cuádriceps (pies bajos)',4,'10','RIR 2','90 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('SS A1: Step up c/mancuernas (más altura)',3,'10 c/lado','RIR 1-2','15 seg → enlazar',{kneeAlert:true}),
-      ex('SS A2: Abducción de cadera en máquina',3,'15-20','RIR 1','60 seg tras la pareja'),
-      ex('Extensión de cuádriceps unilateral',3,'12 c/lado','RIR 1','45 seg'),
-      ex('Banco de aductores',3,'15-20','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Jueves', dayType:'upper', dayFocus:'Tren superior — Tracción (superserie)',
-    blockB:[
-      ex('Remo con barra T',4,'8-10','RIR 2','2 min'),
-      ex('Jalón al pecho agarre cerrado supino',4,'10','RIR 2','90 seg'),
-    ],
-    blockC:[
-      ex('SS A1: Remo con mancuerna a un brazo',3,'10-12 c/lado','RIR 1-2','15 seg → enlazar'),
-      ex('SS A2: Curl bíceps en polea',3,'12-15','RIR 1','60 seg tras la pareja'),
-      ex('Curl martillo en polea (cuerda)',3,'12','RIR 1','45 seg'),
-      ex('Vuelos posteriores en máquina',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Viernes', dayFocus:'Pierna completa (superserie)',
-    blockB:[
-      ex('Sentadilla sumo c/mancuerna (tempo)',4,'10','RIR 2','90 seg'),
-      ex('Zancada búlgara c/mancuernas',3,'8-10 c/lado','RIR 2','75 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('SS A1: Puente de glúteo c/banda (pausa arriba)',3,'15','RIR 1-2','15 seg → enlazar'),
-      ex('SS A2: Curl femoral sentado en máquina',3,'12','RIR 1','60 seg tras la pareja'),
-      ex('Abducción de cadera en máquina',3,'15-20','RIR 1','45 seg'),
-      ex('Gemelos sentada en máquina',2,'15 + myo-reps','RIR 0-1','30 seg'),
-    ],
-  },
+const WARMUP_CARDIO = [
+  'Marcha rápida o trote suave — 3 min',
+  'Movilidad de tobillo y cadera dinámica — 2 min',
+  'Skipping bajo + talones a glúteo — 1 min c/u',
 ];
 
-// ── BLOQUE 3 ──────────────────────────────────────────────
-const m3 = [
-  { dayLabel:'Lunes', dayFocus:'Glúteo + Femoral dominante (pico)',
-    blockB:[
-      ex('Peso muerto rumano c/barra (pico)',5,'5-6','RIR 1','2-3 min'),
-      ex('Hip thrust a una pierna',4,'8-10 c/lado','RIR 1','90 seg'),
-    ],
-    blockC:[
-      ex('Sentadilla búlgara c/mancuernas',3,'8-10 c/lado','RIR 1','75 seg',{kneeAlert:true}),
-      ex('Curl femoral acostado (myo-reps)',2,'10 + mini-series de 5','RIR 0','30 seg'),
-      ex('Patada de glúteo en polea (drop set)',2,'12 + drop a peso menor x12','RIR 0-1','45 seg',{notes:'Al llegar al fallo bajás el peso ~20% sin descanso y continuás.'}),
-      ex('Gemelos de pie en máquina',3,'12-15','RIR 0-1','45 seg'),
-    ],
-  },
-  { dayLabel:'Martes', dayType:'upper', dayFocus:'Tren superior — Empuje (pico)',
-    blockB:[
-      ex('Press banca con mancuernas (pico)',5,'6','RIR 1','2 min'),
-      ex('Press military con barra de pie',4,'6-8','RIR 1','2 min'),
-    ],
-    blockC:[
-      ex('SS A1: Pec fly en máquina',3,'12','RIR 1','15 seg → enlazar'),
-      ex('SS A2: Elevación lateral (myo-reps)',3,'12 + mini-series de 5','RIR 0','30 seg'),
-      ex('Extensión de tríceps en polea (drop set)',2,'12 + drop a peso menor x12','RIR 0-1','45 seg',{notes:'Bajás el peso ~20% sin pausa al llegar al fallo técnico.'}),
-      ex('Face pull en polea',3,'15','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Miércoles', dayFocus:'Cuádriceps + Glúteo dominante (pico)',
-    blockB:[
-      ex('Sentadilla hack (pico)',5,'5-6','RIR 1','2-3 min'),
-      ex('Prensa de cuádriceps unilateral',4,'8-10 c/lado','RIR 1','90 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('Step up c/mancuernas (mayor altura)',3,'8-10 c/lado','RIR 1','60 seg',{kneeAlert:true}),
-      ex('Extensión de cuádriceps (myo-reps)',2,'12 + mini-series de 6','RIR 0','30 seg'),
-      ex('Abducción de cadera en máquina (drop set)',2,'15 + drop a peso menor x15','RIR 0-1','45 seg'),
-      ex('Banco de aductores',3,'15-20','RIR 0-1','45 seg'),
-    ],
-  },
-  { dayLabel:'Jueves', dayType:'upper', dayFocus:'Tren superior — Tracción (pico)',
-    blockB:[
-      ex('Remo con barra T (pico)',5,'5','RIR 1','2-3 min'),
-      ex('Pull over en polea',4,'10-12','RIR 1','90 seg'),
-    ],
-    blockC:[
-      ex('SS A1: Remo con mancuerna a un brazo (pico)',3,'8-10 c/lado','RIR 1','15 seg → enlazar'),
-      ex('SS A2: Face pull en polea',3,'15','RIR 0-1','60 seg tras la pareja'),
-      ex('Curl bíceps con barra (myo-reps)',2,'10 + mini-series de 5','RIR 0','30 seg'),
-      ex('Curl martillo con mancuernas',3,'10-12','RIR 1','45 seg'),
-    ],
-  },
-  { dayLabel:'Viernes', dayFocus:'Pierna completa (pico)',
-    blockB:[
-      ex('Sentadilla sumo c/barra (pico)',5,'5-6','RIR 1','2-3 min'),
-      ex('Zancada caminando c/mancuernas (tempo)',3,'10 c/lado','RIR 1','75 seg',{kneeAlert:true}),
-    ],
-    blockC:[
-      ex('Puente de glúteo c/banda (pausa 2 seg arriba)',3,'15','RIR 1','45 seg'),
-      ex('Curl femoral sentado (myo-reps)',2,'10 + mini-series de 5','RIR 0','30 seg'),
-      ex('Abducción de cadera en máquina',3,'15-20','RIR 0-1','45 seg'),
-      ex('Gemelos sentada (drop set)',2,'15 + drop a peso menor x15','RIR 0-1','30 seg'),
-    ],
-  },
-];
+// ---- MESOCICLO 1 (semanas 1-4): variantes nuevas vs. plan previo ----
+const M1_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (tren completo)',
+  blockB:[
+    { name:'Sentadilla búlgara c/mancuernas', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
+    { name:'Press banca c/barra', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'Remo en polea baja agarre neutro', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Zancada caminando c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'60 seg' },
+    { name:'Elevación lateral mancuerna', sets:3, reps:'12-15', rir:'RIR 1-2', rest:'45 seg' },
+    { name:'Abducción de cadera en máquina', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
+  ],
+};
 
-const TEMPLATES = { m1, m2, m3 };
+const M1_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + acondicionamiento metabólico',
+  blockB:[
+    { name:'Plancha frontal con toques de hombro', sets:3, reps:'30-40 seg', rir:'RIR 2', rest:'45 seg' },
+    { name:'Dead bug c/peso ligero', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'EMOM 14 min — Bloque metabólico', sets:1, reps:'Ver indicaciones', rir:'RPE 7-8', rest:'—',
+      notes:'Cada minuto, en este orden rotando: Min1 Remo en máquina 250m · Min2 Sentadilla goblet x12 · Min3 Push-ups x10 · Min4 Mountain climbers x20 · Min5 Burpee x6 (sustituible por step-up si necesita regresión) · Min6 descanso activo caminando. Repetir el ciclo 2 veces.' },
+  ],
+};
+
+const M1_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción',
+  blockB:[
+    { name:'Peso muerto rumano unilateral c/mancuerna', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
+    { name:'Jalón al pecho agarre amplio', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'Hip thrust c/barra', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Press militar con mancuernas sentada', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
+    { name:'Curl femoral en máquina/banco', sets:3, reps:'12', rir:'RIR 1-2', rest:'45 seg' },
+    { name:'Face pull en polea', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
+  ],
+};
+
+const M1_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio LISS + movilidad',
+  blockB:[
+    { name:'Caminadora inclinada (LISS)', sets:1, reps:'30-40 min', rir:'RPE 4-5', rest:'—',
+      notes:'Inclinación 6-8%, ritmo conversacional (puedes hablar en frases cortas).' },
+  ],
+  blockC:[
+    { name:'Movilidad torácica + cadera (circuito libre)', sets:2, reps:'8-10 min total', rir:'RPE 2-3', rest:'—' },
+  ],
+};
+
+// ---- MESOCICLO 2 (semanas 5-8): superseries, mayor densidad ----
+const M2_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (superserie)',
+  blockB:[
+    { name:'Sentadilla frontal c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
+    { name:'Press inclinado c/mancuernas', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'SS A1: Step up c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'15 seg → enlazar con A2' },
+    { name:'SS A2: Remo mancuerna a un brazo', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
+    { name:'SS B1: Elevación lateral en polea', sets:3, reps:'12-15', rir:'RIR 1', rest:'15 seg → enlazar con B2' },
+    { name:'SS B2: Abducción de cadera de pie en polea', sets:3, reps:'12-15 c/lado', rir:'RIR 1', rest:'60 seg tras la pareja' },
+  ],
+};
+
+const M2_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + HIIT por intervalos',
+  blockB:[
+    { name:'Plancha lateral c/elevación de cadera', sets:3, reps:'10-12 c/lado', rir:'RIR 2', rest:'45 seg' },
+    { name:'Rueda abdominal o press pallof', sets:3, reps:'8-10', rir:'RIR 2', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'HIIT — Intervalos 40/20', sets:8, reps:'40 seg trabajo / 20 seg pausa', rir:'RPE 8-9', rest:'20 seg entre rondas',
+      notes:'Bici/Assault bike o sprint en caminadora. 8 rondas = 8 min totales. Progresar intensidad cada semana, no duración.' },
+  ],
+};
+
+const M2_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción (superserie)',
+  blockB:[
+    { name:'Peso muerto convencional c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
+    { name:'Dominadas asistidas o jalón supino', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
+  ],
+  blockC:[
+    { name:'SS A1: Leg press pies altos', sets:3, reps:'10-12', rir:'RIR 1-2', rest:'15 seg → enlazar' },
+    { name:'SS A2: Push press c/mancuernas', sets:3, reps:'8-10', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
+    { name:'Curl femoral nórdico asistido o en máquina', sets:3, reps:'8-10', rir:'RIR 1', rest:'45 seg' },
+    { name:'Face pull + rotación externa banda', sets:3, reps:'15', rir:'RIR 1', rest:'45 seg' },
+  ],
+};
+
+const M2_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio ondulante + core',
+  blockB:[
+    { name:'Caminadora inclinada (LISS progresivo)', sets:1, reps:'35-45 min', rir:'RPE 5', rest:'—',
+      notes:'Subir inclinación o velocidad ligeramente respecto a Mesociclo 1.' },
+  ],
+  blockC:[
+    { name:'Circuito core (3 rondas, sin pausa entre ejercicios)', sets:3, reps:'12-15 c/u', rir:'RPE 6', rest:'60 seg entre rondas',
+      notes:'Dead bug, bird dog, plancha con toque de rodilla.' },
+  ],
+};
+
+// ---- MESOCICLO 3 (semanas 9-12): pico, EMOM/circuitos nuevos ----
+const M3_DAY1 = {
+  dayLabel:'Día 1', dayFocus:'Pico de fuerza inferior + empuje',
+  blockB:[
+    { name:'Sentadilla trasera c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+    { name:'Press banca c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+  ],
+  blockC:[
+    { name:'Zancada búlgara con salto (regresión: sin salto)', sets:3, reps:'6-8 c/lado', rir:'RIR 1', rest:'60 seg' },
+    { name:'Remo en máquina T-bar', sets:3, reps:'8-10', rir:'RIR 1', rest:'60 seg' },
+    { name:'Elevación lateral myo-reps', sets:3, reps:'12 + mini-series de 5', rir:'RIR 0-1', rest:'30 seg' },
+  ],
+};
+
+const M3_DAY2 = {
+  dayLabel:'Día 2', dayFocus:'Core + circuito "For Time"',
+  blockB:[
+    { name:'Plancha con arrastre de mancuerna', sets:3, reps:'8 c/lado', rir:'RIR 1', rest:'45 seg' },
+  ],
+  blockC:[
+    { name:'For Time — 4 rondas lo más rápido posible (técnica primero)', sets:4, reps:'Ver indicaciones', rir:'RPE 8-9', rest:'Cronometrar tiempo total',
+      notes:'Por ronda: Kettlebell swing x15 · Box step-over x10 · Push-up x10 · Assault bike 250m. Anotar el tiempo total cada semana para medir progreso.' },
+  ],
+};
+
+const M3_DAY3 = {
+  dayLabel:'Día 3', dayFocus:'Pico cadena posterior + tracción',
+  blockB:[
+    { name:'Peso muerto rumano c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
+    { name:'Jalón al pecho agarre cerrado (pico)', sets:5, reps:'5-6', rir:'RIR 1', rest:'2 min' },
+  ],
+  blockC:[
+    { name:'Hip thrust a una pierna', sets:3, reps:'8-10 c/lado', rir:'RIR 1', rest:'60 seg' },
+    { name:'Push press c/mancuernas', sets:3, reps:'6-8', rir:'RIR 1', rest:'60 seg' },
+    { name:'Face pull + curl femoral (superserie final)', sets:3, reps:'12-15 c/u', rir:'RIR 0-1', rest:'45 seg' },
+  ],
+};
+
+const M3_DAY4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio pico + movilidad integral',
+  blockB:[
+    { name:'Caminadora inclinada (LISS pico)', sets:1, reps:'40-50 min', rir:'RPE 5-6', rest:'—' },
+  ],
+  blockC:[
+    { name:'HIIT corto opcional (si energía lo permite)', sets:6, reps:'30 seg fuerte / 30 seg suave', rir:'RPE 7', rest:'—',
+      notes:'Opcional según fatiga acumulada de la semana — escuchar al cuerpo en el cierre del mesociclo.' },
+  ],
+};
+
+const TEMPLATES = {
+  m1: [M1_DAY1, M1_DAY2, M1_DAY3, M1_DAY4],
+  m2: [M2_DAY1, M2_DAY2, M2_DAY3, M2_DAY4],
+  m3: [M3_DAY1, M3_DAY2, M3_DAY3, M3_DAY4],
+};
+
+const WEEK_PROGRESSION_NOTES = {
+  1: 'Semana de recalibración: usa cargas conservadoras (RIR 3-4) para grabar la técnica de los nuevos patrones (búlgara, RDL unilateral). No busques romper PRs.',
+  2: 'Si la técnica de semana 1 fue sólida, sube 2.5-5% de carga en los básicos manteniendo RIR 3.',
+  3: 'Doble progresión en accesorios: si llegaste al techo del rango de reps en las 3 series, sube peso la próxima semana y vuelve al rango bajo.',
+  4: 'Semana de consolidación — mismo peso que semana 3, pero bajamos a RIR 2 (un poco más de esfuerzo) antes de pasar de mesociclo.',
+  5: 'Nuevo bloque: las superseries reducen el descanso entre ejercicios pareados a 15 seg. Mantén técnica; si se degrada, alarga el descanso 10 seg.',
+  6: 'Sube carga en básicos 2.5-5% si la semana 5 se sintió en RIR 2-3. Mantén reps en superseries.',
+  7: 'Empuja a RIR 1-2 en accesorios. Si el HIIT de martes se sintió controlado, aumenta intensidad (no duración) del intervalo.',
+  8: 'Semana de consolidación del mesociclo: mismo peso que semana 7, foco en ejecutar cada repetición con control (tempo 2-0-1).',
+  9: 'Bloque de pico: bajamos repeticiones (5) y subimos intensidad relativa (RIR 1) en básicos. Las cargas pueden sentirse "pesadas mentalmente" — es esperado.',
+  10: 'Si el RIR real de semana 9 fue ≥2 (sobró margen), sube 2.5-5% en los básicos de pico.',
+  11: 'Penúltima semana: prioriza calidad técnica sobre cantidad. Si aparece fatiga acumulada alta, autoriza bajar 1 serie en accesorios.',
+  12: 'Semana de cierre y testeo: repite los mismos pesos de la semana 10-11 en los básicos para medir cuántas repeticiones extra logras a igual RIR — esa es tu métrica de progreso del trimestre.',
+};
 
 const PROG_NOTES = {
   1:'Semana de recalibración: usá cargas conservadoras (RIR 3-4) en los básicos para grabar la técnica de los patrones nuevos (RDL con barra, sentadilla hack, sentadilla sumo). No busquemos romper marcas todavía.',
@@ -494,48 +533,19 @@ function getKneeNote(name) {
   return KNEE_NOTES.default;
 }
 
-function getMeso(week) {
-  if (week <= 4) return MESOCYCLES[0];
-  if (week <= 8) return MESOCYCLES[1];
+
+function getWeekMeso(week){
+  if(week<=4) return MESOCYCLES[0];
+  if(week<=8) return MESOCYCLES[1];
   return MESOCYCLES[2];
 }
-function getSessions(week) {
-  return TEMPLATES[getMeso(week).id];
+
+function getWeekSessions(week){
+  return TEMPLATES[getWeekMeso(week).id];
 }
-
-
-// ── GitHub — videos.json ──────────────────────────────────────────────────────
-const GH_USER = 'martinmamchur';
-const GH_REPO = 'PlanOnline-Romina';
-const GH_FILE = 'videos.json';
-
-async function ghGetVideos() {
-  try {
-    const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch(e) { return null; }
-}
-
-async function ghSaveVideos(videos) {
-  try {
-    const apiUrl = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
-    const getRes = await fetch(apiUrl, { headers: { 'Authorization': `token ${localStorage.getItem('gh_token')||''}`, 'Accept': 'application/vnd.github.v3+json' } });
-    if (!getRes.ok) return false;
-    const { sha } = await getRes.json();
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(videos, null, 2))));
-    const putRes = await fetch(apiUrl, { method: 'PUT', headers: { 'Authorization': `token ${localStorage.getItem('gh_token')||''}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' }, body: JSON.stringify({ message: `Actualizar videos — ${new Date().toLocaleString()}`, content, sha }) });
-    return putRes.ok;
-  } catch(e) { return false; }
-}
-
-async function saveVideo(exName, url) {
-  state.videos[exName] = url;
-  storageSet('videos', state.videos);
-  await ghSaveVideos(state.videos);
-}
-
+/* ============================================================
+   APP STATE
+   ============================================================ */
 let state = {
   tab: 'plan',
   week: 1,
@@ -543,7 +553,7 @@ let state = {
   studentName: storageGet('studentName', 'Romina Cardoso'),
   planStart: storageGet('planStart', ''),
   logData: storageGet('logData', {}),
-  videos: storageGet('videos', {}),
+  videos: storageGet('videos', {}), // cache local, se sincroniza con GitHub al cargar
   sessionDone: storageGet('sessionDone', {}),
 };
 
@@ -551,8 +561,20 @@ function save() {
   storageSet('studentName', state.studentName);
   storageSet('planStart', state.planStart);
   storageSet('logData', state.logData);
-  storageSet('videos', state.videos);
+  storageSet('videos', state.videos); // cache local como backup
   storageSet('sessionDone', state.sessionDone);
+}
+
+// Guardar un video en GitHub y en cache local
+async function saveVideo(exName, url) {
+  state.videos[exName] = url;
+  storageSet('videos', state.videos);
+  // Guardar en GitHub en background (no bloquea la UI)
+  const ok = await ghSaveVideos(state.videos);
+  if (!ok) {
+    // Si falla GitHub, igual queda en localStorage como backup
+    console.warn('No se pudo guardar en GitHub, queda en cache local');
+  }
 }
 
 /* ============================================================
@@ -561,7 +583,7 @@ function save() {
 function completedWeeks() {
   let count = 0;
   for (let w = 1; w <= 12; w++) {
-    const nd = getSessions(w).length;
+    const nd = getWeekSessions(w).length;
     let all = true;
     for (let d = 0; d < nd; d++) {
       if (!state.sessionDone[`w${w}_d${d}__done`]) { all = false; break; }
@@ -610,18 +632,18 @@ function pill(text, accent) {
    ============================================================ */
 function renderHeader() {
   const nameEl = document.getElementById('student-name-display');
-  if (nameEl) nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
-  const dr = document.getElementById('date-range');
-  if (dr) dr.textContent = dateRange();
-  const cc = document.getElementById('completed-count');
-  if (cc) cc.textContent = completedWeeks();
+  const nameInput = document.getElementById('student-name-input');
+  nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
+
+  document.getElementById('date-range').textContent = dateRange();
+  document.getElementById('completed-count').textContent = completedWeeks();
+
   const cw = completedWeeks();
   const segs = document.getElementById('progress-segs');
-  if (segs) {
-    segs.innerHTML = '';
-    for (let i = 1; i <= 12; i++) {
-      segs.appendChild(h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')}));
-    }
+  segs.innerHTML = '';
+  for (let i = 1; i <= 12; i++) {
+    const seg = h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')});
+    segs.appendChild(seg);
   }
 }
 
@@ -632,30 +654,31 @@ function renderPlan() {
   const c = document.getElementById('content');
   c.innerHTML = '';
 
-  const label = h('div', {className:'phase-label', style:'margin-bottom:8px'}, 'Semanas del plan');
+  // Week selector
+  const label = h('div', {className:'phase-label', style:'margin-bottom:8px'}, 'Bloques del plan');
   const weekRow = h('div', {className:'scroll', id:'week-selector'});
   for (let w = 1; w <= 12; w++) {
-    const btn = h('button', {
-      className:'week-btn mono' + (w === state.week ? ' active' : ''),
-      onclick:() => { state.week = w; state.day = 0; renderPlan(); renderHeader(); }
-    }, 'S' + w);
+    const btn = h('button', {className:'week-btn mono' + (w === state.week ? ' active' : ''), onclick:() => { state.week = w; state.day = 0; renderPlan(); renderHeader(); }}, 'S' + w);
     weekRow.appendChild(btn);
   }
 
-  const meso = getMeso(state.week);
-  const sessions = getSessions(state.week);
+  const meso = getWeekMeso(state.week);
+  const sessions = getWeekSessions(state.week);
 
+  // Block card
   const blockCard = h('div', {id:'block-card'},
-    h('div', {id:'block-label'}, meso.name.toUpperCase()),
-    h('div', {id:'block-focus'}, meso.focus || '')
+    h('div', {id:'block-label'}, meso.name.toUpperCase() + ': ' + meso.subtitle.toUpperCase()),
+    h('div', {id:'block-focus'}, meso.focus)
   );
 
+  // Day tabs
   const dayRow = h('div', {className:'scroll', id:'day-tabs'});
   sessions.forEach((s, i) => {
+    const dot = h('span', {className:'day-dot'});
     const btn = h('button', {
       className:'day-btn' + (i === state.day ? ' active' : ''),
       onclick:() => { state.day = i; renderPlan(); }
-    }, h('span', {className:'day-dot'}), s.dayLabel);
+    }, dot, s.dayLabel);
     dayRow.appendChild(btn);
   });
 
@@ -666,6 +689,9 @@ function renderPlan() {
   c.appendChild(renderSession(state.week, state.day, sessions[state.day]));
 }
 
+/* ============================================================
+   RENDER: SESSION
+   ============================================================ */
 function renderSession(week, dayIdx, session) {
   const frag = document.createDocumentFragment();
   const isUpper = session.dayType === 'upper';
@@ -696,8 +722,8 @@ function renderSession(week, dayIdx, session) {
 
   // Coach note
   const noteText = isCardio ? 'Respetá el ritmo indicado de RPE.' : isUpper
-    ? `Semana ${week}/12 · ${getMeso(week).subtitle}. Registrá tus cargas — estas sesiones también forman parte de tu historial.`
-    : `Semana ${week}/12 · ${getMeso(week).subtitle}. Registrá tus cargas y prestá atención a la sensación de rodilla en los ejercicios marcados 🦴.`;
+    ? `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas — estas sesiones también forman parte de tu historial.`
+    : `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y prestá atención a la sensación de rodilla en los ejercicios marcados 🦴.`;
   frag.appendChild(h('div', {className:'coach-note'},
     h('strong', null, 'Nota del coach: '), noteText
   ));
@@ -718,39 +744,47 @@ function renderSession(week, dayIdx, session) {
 
   wuSlots.forEach(function(slot) {
     var wuKey = 'w' + week + '_d' + dayIdx + '_WU_' + slot.key;
-    var vidKey = 'calentamiento__' + slot.key; // clave fija en videos.json
-    var commentKey = wuKey + '__comment';
+    var vidKey = 'calentamiento__' + slot.key; // clave fija — mismo video para todas las semanas
+    var commentKey = wuKey + '__comment'; // comentario sí es por sesión
 
     var wuCard = document.createElement('div');
     wuCard.className = 'ex-card normal';
     wuCard.style.marginBottom = '8px';
 
+    // Label del slot (sin nombre de ejercicio fijo)
     var labelEl = document.createElement('div');
     labelEl.style.cssText = 'font-size:11px;font-family:\'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:8px;';
     labelEl.textContent = slot.label;
     wuCard.appendChild(labelEl);
 
+    // Campo de video
     var vidWrap = document.createElement('div');
     vidWrap.style.cssText = 'margin-bottom:8px;';
 
     var vidInput = document.createElement('input');
-    vidInput.type = 'text'; vidInput.className = 'video-input';
+    vidInput.type = 'text';
+    vidInput.className = 'video-input';
     vidInput.placeholder = 'Pegar link de YouTube Shorts o Vimeo...';
     vidInput.value = state.videos[vidKey] || '';
 
     var savedSpan = document.createElement('span');
-    savedSpan.className = 'video-saved'; savedSpan.style.display = 'none'; savedSpan.textContent = '✓';
+    savedSpan.className = 'video-saved';
+    savedSpan.style.display = 'none';
+    savedSpan.textContent = '✓';
 
     var iframeWrap = document.createElement('div');
     iframeWrap.style.cssText = 'margin-top:8px;border-radius:8px;overflow:hidden;background:#000;display:none;position:relative;padding-top:56.25%;max-width:100%;';
+
     var iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;';
-    iframe.setAttribute('allowfullscreen',''); iframe.setAttribute('allow','autoplay; fullscreen; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
     iframeWrap.appendChild(iframe);
 
     function makeWuEmbed(inp, ifr, wrap) {
       return function() {
-        var raw = inp.value; var embedUrl = getEmbedUrl(raw);
+        var raw = inp.value;
+        var embedUrl = getEmbedUrl(raw);
         if (embedUrl) {
           ifr.src = embedUrl; wrap.style.display = 'block';
           if (isVertical(raw)) {
@@ -781,8 +815,10 @@ function renderSession(week, dayIdx, session) {
     vidWrap.appendChild(vidRow); vidWrap.appendChild(iframeWrap);
     wuCard.appendChild(vidWrap);
 
+    // Comentario
     var comment = document.createElement('textarea');
-    comment.className = 'log-comment'; comment.placeholder = 'Comentarios...';
+    comment.className = 'log-comment';
+    comment.placeholder = 'Comentarios...';
     comment.value = (state.logData[commentKey] && state.logData[commentKey].comment) || '';
     comment.addEventListener('input', function() {
       state.logData[commentKey] = { comment: comment.value }; save();
@@ -953,8 +989,8 @@ function renderExCard(week, dayIdx, phase, idx, exObj) {
   }
 
   vidInput.addEventListener('input', function() {
-    state.videos[vidKey] = vidInput.value;
-    save();
+    const exName = vidKey; // usamos vidKey como identificador
+    saveVideo(exName, vidInput.value); // guarda en GitHub + localStorage
     savedSpan.style.display = 'inline';
     setTimeout(function() { savedSpan.style.display = 'none'; }, 1200);
     updateEmbed();
@@ -1059,7 +1095,7 @@ function renderStats() {
   c.innerHTML = '';
 
   let totalSessions = 0;
-  for (let w = 1; w <= 12; w++) totalSessions += getSessions(w).length;
+  for (let w = 1; w <= 12; w++) totalSessions += getWeekSessions(w).length;
   const doneCount = Object.values(state.sessionDone).filter(Boolean).length;
   const pct = totalSessions ? Math.round((doneCount/totalSessions)*100) : 0;
   const setsLogged = Object.values(state.logData).reduce((acc, e) => {
@@ -1091,9 +1127,9 @@ function renderStats() {
   c.appendChild(label2);
 
   MESOCYCLES.forEach(m => {
-    const sessInBlock = m.weeks.reduce((acc, w) => acc + getSessions(w).length, 0);
+    const sessInBlock = m.weeks.reduce((acc, w) => acc + getWeekSessions(w).length, 0);
     const doneInBlock = m.weeks.reduce((acc, w) => {
-      const nd = getSessions(w).length;
+      const nd = getWeekSessions(w).length;
       let cnt = 0;
       for (let d = 0; d < nd; d++) { if (state.sessionDone[`w${w}_d${d}__done`]) cnt++; }
       return acc + cnt;
@@ -1266,7 +1302,7 @@ function commitName() {
    ============================================================ */
 function exportProgress() {
   var payload = {
-    app: 'plan-recomposicion-12-semanas-romina',
+    app: 'plan-piernas-12-semanas-victoria',
     exportedAt: new Date().toISOString(),
     studentName: state.studentName,
     planStart: state.planStart,
@@ -1330,16 +1366,26 @@ function showImportMsg(text, type) {
 function resetAll() {
   if (!confirm('Esto borrará todo el registro guardado (series, videos, sesiones completadas y nombre). ¿Seguro?')) return;
   state.logData = {}; state.videos = {}; state.sessionDone = {};
-  state.studentName = 'Romina Cardoso'; state.planStart = '';
+  state.studentName = 'Victoria'; state.planStart = '';
   save(); renderHeader(); switchTab('plan');
 }
 
 /* ============================================================
    BOOT
    ============================================================ */
-// Si el DOM ya está listo (script al final del body), ejecutar directo.
-// Si no, esperar DOMContentLoaded. Funciona en cualquier contexto.
+function _showError(msg, detail) {
+  var c = document.getElementById('content');
+  if (!c) return;
+  c.innerHTML = '<div style="padding:20px;color:#ff4426;font-family:monospace;font-size:13px;line-height:1.6">'
+    + '<div style="font-size:16px;font-weight:bold;margin-bottom:12px">⚠️ Error al cargar</div>'
+    + '<div style="margin-bottom:8px">' + msg + '</div>'
+    + (detail ? '<div style="background:#1d1d1d;padding:10px;border-radius:6px;margin-top:8px;font-size:11px;color:#9a9a96;word-break:break-all">' + detail + '</div>' : '')
+    + '</div>';
+}
+
 async function _boot() {
+  // Cargar videos desde GitHub (fuente de verdad del coach)
+  // Si falla (sin internet), usa el cache local de localStorage
   try {
     const ghVideos = await ghGetVideos();
     if (ghVideos && typeof ghVideos === 'object') {
@@ -1347,11 +1393,22 @@ async function _boot() {
       storageSet('videos', ghVideos);
     }
   } catch(e) { /* usa cache local */ }
-  renderHeader();
-  renderPlan();
+
+  try {
+    renderHeader();
+  } catch(e) {
+    _showError('Error en renderHeader: ' + e.message, e.stack ? e.stack.split('\n').slice(0,4).join(' | ') : '');
+    return;
+  }
+  try {
+    renderPlan();
+  } catch(e) {
+    _showError('Error en renderPlan: ' + e.message, e.stack ? e.stack.split('\n').slice(0,4).join(' | ') : '');
+  }
 }
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _boot);
+  document.addEventListener('DOMContentLoaded', function() { _boot(); });
 } else {
   _boot();
 }
