@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-cardoso",
-  "exportedAt": "2026-07-29T10:14:10.421Z",
+  "exportedAt": "2026-07-31T23:11:00.746Z",
   "planStart": "2026-06-29",
   "logData": {
     "w1_d0_C__log0": {
@@ -1112,6 +1112,8 @@
     "w4_d2__done": true,
     "w4_d0__done": true,
     "w4_d1__done": true,
-    "w4_d3__done": true
+    "w4_d3__done": true,
+    "w5_d0__done": true,
+    "w5_d3__done": true
   }
 }
