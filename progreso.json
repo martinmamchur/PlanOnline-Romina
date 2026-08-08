@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-cardoso",
-  "exportedAt": "2026-08-08T16:40:54.513Z",
+  "exportedAt": "2026-08-08T17:38:18.180Z",
   "planStart": "2026-06-29",
   "logData": {
     "w1_d0_C__log0": {
@@ -1035,6 +1035,100 @@
         }
       ],
       "comment": "subi peso, baje reps",
+      "kneeSensation": null
+    },
+    "w6_d0_C__log3": {
+      "sets": [
+        {
+          "kg": "13",
+          "reps": "12"
+        },
+        {
+          "kg": "13",
+          "reps": "15"
+        },
+        {
+          "kg": "13",
+          "reps": "15"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d0_C__log2": {
+      "sets": [
+        {
+          "kg": "4,5",
+          "reps": "15"
+        },
+        {
+          "kg": "4,5",
+          "reps": "15"
+        },
+        {
+          "kg": "4,5",
+          "reps": "15"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d0_C__log1": {
+      "sets": [
+        {
+          "kg": "12,5",
+          "reps": "10"
+        },
+        {
+          "kg": "12,5",
+          "reps": "10"
+        },
+        {
+          "kg": "12,5",
+          "reps": "10"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d0_C__log0": {
+      "sets": [
+        {
+          "kg": "15",
+          "reps": "10"
+        },
+        {
+          "kg": "15",
+          "reps": "10"
+        },
+        {
+          "kg": "15",
+          "reps": "10"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d0_B__log1": {
+      "sets": [
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "7,5",
+          "reps": "10"
+        }
+      ],
+      "comment": "",
       "kneeSensation": null
     }
   },
