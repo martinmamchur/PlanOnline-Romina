@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-cardoso",
-  "exportedAt": "2026-08-08T18:02:00.813Z",
+  "exportedAt": "2026-08-09T13:11:49.114Z",
   "planStart": "2026-06-29",
   "logData": {
     "w1_d0_C__log0": {
@@ -1170,6 +1170,122 @@
       ],
       "comment": "",
       "kneeSensation": null
+    },
+    "w6_d2_B__log0": {
+      "sets": [
+        {
+          "kg": "20",
+          "reps": "8"
+        },
+        {
+          "kg": "22,5",
+          "reps": "8"
+        },
+        {
+          "kg": "25",
+          "reps": "8"
+        },
+        {
+          "kg": "25",
+          "reps": "8"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d2_B__log1": {
+      "sets": [
+        {
+          "kg": "68",
+          "reps": "8"
+        },
+        {
+          "kg": "72",
+          "reps": "10"
+        },
+        {
+          "kg": "72",
+          "reps": "10"
+        },
+        {
+          "kg": "72",
+          "reps": "10"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d2_C__log0": {
+      "sets": [
+        {
+          "kg": "35",
+          "reps": "12"
+        },
+        {
+          "kg": "35",
+          "reps": "12"
+        },
+        {
+          "kg": "35",
+          "reps": "12"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d2_C__log1": {
+      "sets": [
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "7,5",
+          "reps": "10"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w6_d2_C__log2": {
+      "sets": [
+        {
+          "kg": "50",
+          "reps": "10"
+        },
+        {
+          "kg": "59",
+          "reps": "10"
+        },
+        {
+          "kg": "59",
+          "reps": "10"
+        }
+      ],
+      "comment": "lo hice en maquina ",
+      "kneeSensation": null
+    },
+    "w6_d2_C__log3": {
+      "sets": [
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "kneeSensation": null,
+      "comment": "me sale muy mal este ejercicio"
     }
   },
   "videos": {
@@ -1250,6 +1366,7 @@
     "w5_d0__done": true,
     "w5_d3__done": true,
     "w6_d0__done": true,
-    "w6_d1__done": true
+    "w6_d1__done": true,
+    "w6_d2__done": true
   }
 }
