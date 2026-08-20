@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-cardoso",
-  "exportedAt": "2026-08-20T00:12:17.404Z",
+  "exportedAt": "2026-08-20T00:12:51.933Z",
   "planStart": "2026-06-29",
   "logData": {
     "w1_d0_C__log0": {
@@ -1472,6 +1472,24 @@
         {
           "kg": "",
           "reps": "15"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w8_d2_C__log0": {
+      "sets": [
+        {
+          "kg": "45",
+          "reps": "12"
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
         }
       ],
       "comment": "",
