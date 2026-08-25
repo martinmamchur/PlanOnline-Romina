@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-cardoso",
-  "exportedAt": "2026-08-25T23:35:54.289Z",
+  "exportedAt": "2026-08-25T23:36:20.395Z",
   "planStart": "2026-06-29",
   "logData": {
     "w1_d0_C__log0": {
@@ -1831,6 +1831,24 @@
         }
       ],
       "comment": "hice 12, descanse 15 seg y luego las otras 5 (ver si esta ok) y luego 30 seg entre la otra serie",
+      "kneeSensation": null
+    },
+    "w9_d0_C__log0": {
+      "sets": [
+        {
+          "kg": "",
+          "reps": "6"
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "comment": "",
       "kneeSensation": null
     }
   },
