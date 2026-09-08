@@ -1533,79 +1533,40 @@ function commitName() {
    EXPORT / IMPORT
    ============================================================ */
 /* ============================================================ GITHUB PROGRESS SYNC */
-const GH_PROGRESS_FILE = 'progreso.json';
-
-function getProgressToken(){ return localStorage.getItem('gh_token_romina')||''; }
-function setProgressToken(t){ localStorage.setItem('gh_token_romina',t); }
+const WORKER_URL = 'https://impetus-sync.martinmamchur.workers.dev';
+const WORKER_REPO = 'PlanOnline-Romina';
 
 async function ghLoadProgress(){
   try{
-    const url='https://raw.githubusercontent.com/'+GH_USER+'/'+GH_REPO+'/main/'+GH_PROGRESS_FILE+'?t='+Date.now();
-    const res=await fetch(url);
+    const res = await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&t='+Date.now());
     if(!res.ok) return null;
     return await res.json();
   }catch(e){ return null; }
 }
 
-async function reloadProgress(){
-  showSyncMsg('Actualizando desde GitHub...','');
-  try {
-    const ghProgress = await ghLoadProgress();
-    if (ghProgress && ghProgress.logData) {
-      state.logData = ghProgress.logData;
-      state.sessionDone = ghProgress.sessionDone || {};
-      if(ghProgress.planStart) state.planStart = ghProgress.planStart;
-      storageSet('logData', state.logData);
-      storageSet('sessionDone', state.sessionDone);
-      storageSet('planStart', state.planStart);
-      renderHeader();
-      renderPlan();
-      showSyncMsg('✓ Progreso actualizado','ok');
-    } else {
-      showSyncMsg('Sin progreso guardado en GitHub','');
-    }
-  } catch(e) { showSyncMsg('✗ Error al actualizar','err'); }
-}
-
 async function ghSaveProgress(){
-  const token=getProgressToken();
-  if(!token){ showSyncMsg('Pegá tu token de GitHub primero','err'); showTokenUI(); return; }
   showSyncMsg('Sincronizando...','');
   const data={app:'plan-romina-cardoso',exportedAt:new Date().toISOString(),
     planStart:state.planStart,logData:state.logData,videos:state.videos,sessionDone:state.sessionDone};
   try{
-    const apiUrl='https://api.github.com/repos/'+GH_USER+'/'+GH_REPO+'/contents/'+GH_PROGRESS_FILE;
-    const headers={'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
-    let sha=null;
-    try{ const gr=await fetch(apiUrl,{headers}); if(gr.ok){const gd=await gr.json(); sha=gd.sha;} }catch(e){}
-    const content=btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2))));
-    const body={message:'Progreso Romina — '+new Date().toLocaleString(),content,...(sha?{sha}:{})};
-    const r=await fetch(apiUrl,{method:'PUT',headers,body:JSON.stringify(body)});
-    if(r.ok){ showSyncMsg('☁ Sincronizado en GitHub','ok'); }
-    else{ showSyncMsg('✗ Error al sincronizar ('+r.status+')','err'); }
-  }catch(e){ showSyncMsg('✗ Error al sincronizar','err'); }
+    const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(res.ok){showSyncMsg('☁ Sincronizado','ok');}
+    else{showSyncMsg('✗ Error ('+res.status+')','err');}
+  }catch(e){showSyncMsg('✗ Error al sincronizar','err');}
 }
 
-function showSyncMsg(text,type){
-  const el=document.getElementById('sync-msg');
-  if(!el) return;
-  el.textContent=text;
-  el.style.color=type==='ok'?'var(--lime)':type==='err'?'var(--accent)':'var(--dim)';
-  if(text) setTimeout(()=>{ el.textContent=''; },3000);
-}
-
-function showTokenUI(){
-  const el=document.getElementById('token-ui');
-  if(el) el.style.display=el.style.display==='none'?'block':'none';
-}
-
-function saveTokenAndClose(){
-  const inp=document.getElementById('token-input');
-  if(inp && inp.value.trim()){
-    setProgressToken(inp.value.trim());
-    showTokenUI();
-    showSyncMsg('Token guardado','ok');
-  }
+async function reloadProgress(){
+  showSyncMsg('Actualizando...','');
+  try{
+    const p=await ghLoadProgress();
+    if(p&&p.logData){
+      state.logData=p.logData; state.sessionDone=p.sessionDone||{};
+      if(p.planStart) state.planStart=p.planStart;
+      storageSet('logData',state.logData); storageSet('sessionDone',state.sessionDone); storageSet('planStart',state.planStart);
+      renderHeader(); renderPlan();
+      showSyncMsg('✓ Actualizado','ok');
+    }else{showSyncMsg('Sin datos en GitHub','');}
+  }catch(e){showSyncMsg('✗ Error','err');}
 }
 
 /* ============================================================ EXPORT / IMPORT */
