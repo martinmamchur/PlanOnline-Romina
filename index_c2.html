@@ -1546,65 +1546,47 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   wuSlots.forEach(function(slot) {
     var wuKey = 'w' + week + '_d' + dayIdx + '_WU_' + slot.key;
     var vidKey = 'calentamiento__' + slot.key; // clave fija — mismo video para todas las semanas
-    var commentKey = wuKey + '__comment'; // comentario sí es por sesión
+    var doneKey = wuKey + '__done';
 
     var wuCard = document.createElement('div');
     wuCard.style.cssText = 'background:var(--surface2);border-radius:8px;padding:8px 10px;border:1px solid var(--border);';
 
-    // Label del slot (sin nombre de ejercicio fijo)
-    var labelEl = document.createElement('div');
-    labelEl.style.cssText = 'font-size:10px;font-family:\'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:6px;';
-    labelEl.textContent = slot.label;
-    wuCard.appendChild(labelEl);
+    var top = document.createElement('div');
+    top.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;';
 
-    // Campo de video (compacto)
+    var labelEl = document.createElement('div');
+    labelEl.style.cssText = 'font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);';
+    labelEl.textContent = slot.label;
+
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = !!(state.logData[doneKey] && state.logData[doneKey].done);
+    chk.style.cssText = 'width:14px;height:14px;accent-color:var(--ceo-blue);cursor:pointer;';
+    chk.disabled = isReadOnlyMode();
+    chk.addEventListener('change', function() {
+      if (isReadOnlyMode()) return;
+      state.logData[doneKey] = { done: chk.checked }; save();
+      labelEl.style.color = chk.checked ? 'var(--ceo-blue)' : 'var(--dim)';
+    });
+    if (chk.checked) labelEl.style.color = 'var(--ceo-blue)';
+
+    top.appendChild(labelEl); top.appendChild(chk);
+    wuCard.appendChild(top);
+
     var vidInput = document.createElement('input');
-    vidInput.type = 'text';
+    vidInput.type = 'url';
     vidInput.placeholder = 'Link video...';
     vidInput.value = state.videos[vidKey] || '';
-    vidInput.style.cssText = 'width:100%;font-size:11px;padding:5px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--dim);outline:none;box-sizing:border-box;';
-    vidInput.disabled = isReadOnlyMode();
-
-    var savedSpan = document.createElement('span');
-    savedSpan.textContent = '✓';
-    savedSpan.style.cssText = 'display:none;font-size:11px;color:var(--lime);flex-shrink:0;';
-
-    var playBtn = document.createElement('button');
-    playBtn.type = 'button';
-    playBtn.textContent = '▶';
-    playBtn.title = 'Ver video';
-    playBtn.style.cssText = 'background:none;border:1px solid var(--lime);color:var(--lime);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;flex-shrink:0;display:none;';
-    function updateWuPlayBtn() {
-      playBtn.style.display = vidInput.value.trim() ? 'inline-block' : 'none';
-    }
-    playBtn.addEventListener('click', function() {
-      if (vidInput.value.trim()) openVideoModal(vidInput.value.trim());
-    });
-
-    vidInput.addEventListener('input', function() {
-      saveVideo(vidKey, vidInput.value);
-      savedSpan.style.display = 'inline';
-      setTimeout(function() { savedSpan.style.display = 'none'; }, 1200);
-      updateWuPlayBtn();
-    });
-    updateWuPlayBtn();
-
-    var vidRow = document.createElement('div');
-    vidRow.style.cssText = 'display:flex;align-items:center;gap:5px;margin-bottom:6px;';
-    vidRow.appendChild(vidInput); vidRow.appendChild(savedSpan); vidRow.appendChild(playBtn);
-    wuCard.appendChild(vidRow);
-
-    // Comentario (compacto)
-    var comment = document.createElement('textarea');
-    comment.placeholder = 'Comentarios...';
-    comment.value = (state.logData[commentKey] && state.logData[commentKey].comment) || '';
-    comment.style.cssText = 'width:100%;font-size:11px;padding:5px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text);outline:none;resize:vertical;min-height:32px;box-sizing:border-box;font-family:inherit;';
-    comment.disabled = isReadOnlyMode();
-    comment.addEventListener('input', function() {
+    vidInput.style.cssText = 'width:100%;font-size:11px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--dim);outline:none;box-sizing:border-box;';
+    vidInput.readOnly = isReadOnlyMode();
+    vidInput.addEventListener('change', function() {
       if (isReadOnlyMode()) return;
-      state.logData[commentKey] = { comment: comment.value }; save();
+      if (!state.videos) state.videos = {};
+      state.videos[vidKey] = vidInput.value.trim();
+      saveVideo(vidKey, vidInput.value.trim());
     });
-    wuCard.appendChild(comment);
+    wuCard.appendChild(vidInput);
+
     wuGrid.appendChild(wuCard);
   });
 
