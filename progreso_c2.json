@@ -1,12 +1,14 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-09-13T04:55:38.770Z",
+  "exportedAt": "2026-09-13T04:57:06.075Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
       "done": false
     }
   },
-  "videos": {},
+  "videos": {
+    "calentamiento__mov1": "Circunducción de hombros https://youtube.com/shorts/KSM5vN4Jaqw?feature=share"
+  },
   "sessionDone": {}
 }
