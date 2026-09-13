@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Build: 2026-09-13 02:59:44 -->
+<!-- Build: 2026-09-13 03:09:47 -->
 <!--  2026-09-13 01:59:01 -->
 <html lang="es">
 <head>
@@ -288,7 +288,7 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
   <div id="progress-bar-wrap">
     <div id="progress-label">
       <div class="mono" style="font-size:11px;color:var(--faint);letter-spacing:.1em;">PROGRESO DEL PLAN</div>
-      <div class="mono" style="font-size:13px;font-weight:700;"><span id="completed-count" style="color:var(--lime);">0</span><span style="color:var(--faint);"> / 12 SEMANAS</span></div>
+      <div class="mono" style="font-size:13px;font-weight:700;"><span id="completed-count" style="color:var(--lime);">0</span><span style="color:var(--faint);"> / 8 SEMANAS</span></div>
     </div>
     <div id="progress-segs" class="prog-segs"></div>
   </div>
@@ -1692,7 +1692,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   // Prog note
   frag.appendChild(h('div', {className:'prog-note'},
     h('div', {className:'phase-label'}, 'Progresión semanal — sobrecarga progresiva'),
-    h('p', {style:'font-size:13.5px;line-height:1.6;color:var(--dim)'}, PROG_NOTES[week])
+    h('p', {style:'font-size:13.5px;line-height:1.6;color:var(--dim)'}, WEEK_PROGRESSION_NOTES[week])
   ));
 
   return frag;
