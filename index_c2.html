@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Build: 2026-09-13 02:51:40 -->
+<!-- Build: 2026-09-13 02:59:44 -->
 <!--  2026-09-13 01:59:01 -->
 <html lang="es">
 <head>
@@ -2051,7 +2051,7 @@ function renderStats() {
   c.innerHTML = '';
 
   let totalSessions = 0;
-  for (let w = 1; w <= 12; w++) totalSessions += getWeekSessions(w).length;
+  for (let w = 1; w <= 8; w++) totalSessions += getWeekSessions(w).length;
   const doneCount = Object.values(state.sessionDone).filter(Boolean).length;
   const pct = totalSessions ? Math.round((doneCount/totalSessions)*100) : 0;
   const setsLogged = Object.values(state.logData).reduce((acc, e) => {
@@ -2226,7 +2226,7 @@ function renderPlan() {
   // Week selector
   const label = h('div', {className:'phase-label', style:'margin-bottom:8px'}, 'Bloques del plan');
   const weekRow = h('div', {className:'scroll', id:'week-selector'});
-  for (let w = 1; w <= 12; w++) {
+  for (let w = 1; w <= 8; w++) {
     const btn = h('button', {className:'week-btn mono' + (w === state.week ? ' active' : ''), onclick:() => { state.week = w; state.day = 0; renderPlan(); renderHeader(); }}, 'S' + w);
     weekRow.appendChild(btn);
   }
