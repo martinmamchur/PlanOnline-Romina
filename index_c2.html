@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Build: 2026-09-13 02:00:54 -->
+<!-- Build: 2026-09-13 02:03:47 -->
 <!--  2026-09-13 01:59:01 -->
 <html lang="es">
 <head>
@@ -675,7 +675,7 @@ function renderCicloHormonal() {
     <div class="ciclo-item"><div class="ciclo-item-title">Si estás en la mitad del mes y te sentís con mucha energía</div><div class="ciclo-item-text">Suele ser el momento del mes donde más fuerza tenés. Si elegiste "mucha energía" hoy, es una buena semana para intentar superar una marca personal o hacer las series más completas. Solo tené cuidado con los saltos o movimientos muy bruscos si tocan en tu plani — tu cuerpo en esta etapa es más propenso a pequeños tirones.</div></div>
     <div class="ciclo-item"><div class="ciclo-item-title">Si estás en la semana previa a tus primeros días</div><div class="ciclo-item-text">Es muy común sentirse más cansada, irritable o inflamada. Si elegiste "baja energía" o "energía media" hoy, tu cuerpo te está hablando y está bien hacerle caso. Hacé lo que puedas, sin compararte con cómo estabas la semana pasada. Completar la sesión así como te sentís ya es un logro enorme.</div></div>`;
   let open = false;
-  header.onclick = function() { open=!open; body.style.display=open?'block':'none'; document.getElementById('ciclo-toggle').textContent=open?'▲ ocultar':'▼ ver'; };
+  header.onclick = function() { open=!open; body.style.display=open?'block':'none'; const ct=document.getElementById('ciclo-toggle');if(ct)ct.textContent=open?'▲ ocultar':'▼ ver'; };
   wrap.appendChild(header); wrap.appendChild(body); return wrap;
 }
 function renderCEOModNote(session){
@@ -2167,14 +2167,16 @@ function renderHeader() {
   if(nameEl) nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
 
   const drEl = document.getElementById('date-range'); if(drEl) drEl.textContent = dateRange();
-  document.getElementById('completed-count').textContent = completedWeeks();
+  const ccEl = document.getElementById('completed-count'); if(ccEl) ccEl.textContent = completedWeeks();
 
   const cw = completedWeeks();
   const segs = document.getElementById('progress-segs');
-  segs.innerHTML = '';
-  for (let i = 1; i <= 12; i++) {
-    const seg = h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')});
-    segs.appendChild(seg);
+  if(segs) {
+    segs.innerHTML = '';
+    for (let i = 1; i <= 8; i++) {
+      const seg = h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')});
+      segs.appendChild(seg);
+    }
   }
 
   const roBtn = document.getElementById('readonly-toggle-btn');
