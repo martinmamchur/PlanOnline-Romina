@@ -1565,19 +1565,39 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     top.appendChild(labelEl); top.appendChild(chk);
     wuCard.appendChild(top);
 
+    var vidRow = document.createElement('div');
+    vidRow.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
     var vidInput = document.createElement('input');
     vidInput.type = 'url';
     vidInput.placeholder = 'Link video...';
     vidInput.value = state.videos[vidKey] || '';
-    vidInput.style.cssText = 'width:100%;font-size:11px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--dim);outline:none;box-sizing:border-box;';
+    vidInput.style.cssText = 'flex:1;min-width:0;font-size:11px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--dim);outline:none;box-sizing:border-box;';
     vidInput.readOnly = isReadOnlyMode();
+
+    var playBtn = document.createElement('button');
+    playBtn.type = 'button';
+    playBtn.textContent = '▶';
+    playBtn.title = 'Ver video';
+    playBtn.style.cssText = 'background:none;border:1px solid var(--lime);color:var(--lime);border-radius:5px;padding:3px 7px;font-size:10px;line-height:1;cursor:pointer;flex-shrink:0;display:none;';
+    function updateWuPlayBtn() {
+      playBtn.style.display = vidInput.value.trim() ? 'inline-block' : 'none';
+    }
+    playBtn.addEventListener('click', function() {
+      if (vidInput.value.trim()) openVideoModal(vidInput.value.trim());
+    });
+
     vidInput.addEventListener('change', function() {
       if (isReadOnlyMode()) return;
       if (!state.videos) state.videos = {};
       state.videos[vidKey] = vidInput.value.trim();
       saveVideo(vidKey, vidInput.value.trim());
+      updateWuPlayBtn();
     });
-    wuCard.appendChild(vidInput);
+    updateWuPlayBtn();
+
+    vidRow.appendChild(vidInput); vidRow.appendChild(playBtn);
+    wuCard.appendChild(vidRow);
 
     wuGrid.appendChild(wuCard);
   });
