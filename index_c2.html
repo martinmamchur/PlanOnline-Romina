@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Build: 2026-09-13 02:03:47 -->
+<!-- Build: 2026-09-13 02:07:34 -->
 <!--  2026-09-13 01:59:01 -->
 <html lang="es">
 <head>
@@ -2159,6 +2159,32 @@ function _showError(msg, detail) {
     + '<div style="margin-bottom:8px">' + msg + '</div>'
     + (detail ? '<div style="background:#1d1d1d;padding:10px;border-radius:6px;margin-top:8px;font-size:11px;color:#9a9a96;word-break:break-all">' + detail + '</div>' : '')
     + '</div>';
+}
+
+function getKneeNote(name) {
+  const n = name.toLowerCase();
+  if (n.includes('step')) return KNEE_NOTES.step;
+  if (n.includes('zancada')) return KNEE_NOTES.zancada;
+  if (n.includes('b\u00falgara')) return KNEE_NOTES.bulg;
+  if (n.includes('prensa')) return KNEE_NOTES.prensa;
+  return KNEE_NOTES.default;
+}
+
+function getWeekMeso(week){
+  if(week<=4) return MESOCYCLES[0];
+  if(week<=8) return MESOCYCLES[1];
+  return MESOCYCLES[2];
+}
+
+async function saveVideo(exName, url) {
+  state.videos[exName] = url;
+  storageSet('videos', state.videos);
+  // Guardar en GitHub en background (no bloquea la UI)
+  const ok = await ghSaveVideos(state.videos);
+  if (!ok) {
+    // Si falla GitHub, igual queda en localStorage como backup
+    console.warn('No se pudo guardar en GitHub, queda en cache local');
+  }
 }
 
 function renderHeader() {
