@@ -1592,23 +1592,23 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
 
   ecBody.appendChild(wuGrid);
 
-  // Fase B
-  frag.appendChild(h('div', {className:'phase-label'}, 'Fase B — Fuerza / Hipertrofia principal'));
+  // Ejercicios principales
+  frag.appendChild(h('div', {className:'phase-label'}, '💪 Ejercicios principales'));
   renderExerciseList(frag, session.blockB, week, dayIdx, 'B');
 
 
-  // Fase C
+  // Ejercicios accesorios
   if (session.blockC && session.blockC.length) {
-    frag.appendChild(h('div', {className:'phase-label'}, 'Fase C — Hipertrofia accesoria'));
+    frag.appendChild(h('div', {className:'phase-label'}, '🎯 Ejercicios accesorios'));
     renderExerciseList(frag, session.blockC, week, dayIdx, 'C');
   }
 
-  // Fase D
+  // Cierre
   const faseDText = session.phaseD || (isCardio
     ? 'Cerrá con 5-8 min de estiramiento de piernas y respiración para bajar pulsaciones.'
     : 'Si terminaste con energía, sumá 8-12 min de cardio en bici o caminadora a ritmo sostenido (RPE 5-6).');
   frag.appendChild(h('div', {className:'phase-d'},
-    h('strong', null, 'Fase D — ' + (isCardio ? 'Cierre: ' : 'Cardio opcional de cierre: ')),
+    h('strong', null, (isCardio ? '🧘 Cierre: ' : '🚴 Cardio opcional de cierre: ')),
     faseDText
   ));
 
