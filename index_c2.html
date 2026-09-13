@@ -74,8 +74,6 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
 .badge{display:inline-block;padding:4px 10px;border-radius:5px;font-family:'JetBrains Mono',monospace;
   font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
 .badge-accent{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);}
-.badge-upper{background:rgba(130,183,217,.08);color:var(--lime);border:1px solid var(--lime);}
-.badge-leg{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);}
 #session-title{font-size:26px;font-weight:700;line-height:1.1;margin-bottom:16px;}
 .coach-note{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13.5px;line-height:1.6;}
 .coach-note strong{color:var(--lime);}
@@ -443,7 +441,7 @@ const C2_M1_D3 = {
 };
 
 const C2_M1_D4 = {
-  dayLabel:'Día 4', dayFocus:'Cardio LISS + movilidad activa',
+  dayLabel:'Día 4', dayType:'cardio', dayFocus:'Cardio LISS + movilidad activa',
   blockB:[
     ex('Caminadora inclinada (LISS)',1,'35-40 min','RPE 5-6','—'),
   ],
@@ -496,7 +494,7 @@ const C2_M2_D3 = {
 };
 
 const C2_M2_D4 = {
-  dayLabel:'Día 4', dayFocus:'Cardio LISS pico + movilidad integral',
+  dayLabel:'Día 4', dayType:'cardio', dayFocus:'Cardio LISS pico + movilidad integral',
   blockB:[
     ex('Caminadora inclinada (LISS pico)',1,'40-45 min','RPE 5-6','—'),
   ],
@@ -1474,15 +1472,15 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     msgWrap.appendChild(msgText); frag.appendChild(msgWrap);
   }
   frag.appendChild(renderCicloHormonal());
-  const isUpper = session.dayType === 'upper';
+  const isCircuito = session.dayType === 'circuito';
   const isCardio = session.dayType === 'cardio';
   const doneKey = `w${week}_d${dayIdx}__done`;
   const isDone = !!state.sessionDone[doneKey];
 
   // Badge
-  const badgeText = isUpper ? 'Tren Superior' : isCardio ? 'Cardio' : 'Pierna';
+  const badgeText = isCircuito ? 'Circuito' : isCardio ? 'Cardio' : 'Fuerza';
   const badgeEl = h('div', {id:'session-badge'},
-    h('span', {className:'badge badge-' + (isUpper ? 'upper' : 'accent')}, badgeText)
+    h('span', {className:'badge badge-accent'}, badgeText)
   );
   frag.appendChild(badgeEl);
 
@@ -1509,8 +1507,8 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   frag.appendChild(warnEl);
 
   // Coach note
-  const noteText = isCardio ? 'Respetá el ritmo indicado de RPE.' : isUpper
-    ? `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas — estas sesiones también forman parte de tu historial.`
+  const noteText = isCardio ? 'Respetá el ritmo indicado de RPE.' : isCircuito
+    ? `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Prestá atención a la técnica en cada ronda — la velocidad viene después.`
     : `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y la técnica en cada ejercicio.`;
   frag.appendChild(h('div', {className:'coach-note'},
     h('strong', null, 'Nota del coach: '), noteText
@@ -1625,11 +1623,11 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   }
 
   // Fase D
-  const faseDText = session.phaseD || (isUpper
-    ? 'Podés cerrar con 5-8 min de movilidad de hombros y estiramiento de pectorales.'
+  const faseDText = session.phaseD || (isCardio
+    ? 'Cerrá con 5-8 min de estiramiento de piernas y respiración para bajar pulsaciones.'
     : 'Si terminaste con energía, sumá 8-12 min de cardio en bici o caminadora a ritmo sostenido (RPE 5-6).');
   frag.appendChild(h('div', {className:'phase-d'},
-    h('strong', null, 'Fase D — ' + (isUpper ? 'Movilidad de cierre: ' : 'Cardio opcional de cierre: ')),
+    h('strong', null, 'Fase D — ' + (isCardio ? 'Cierre: ' : 'Cardio opcional de cierre: ')),
     faseDText
   ));
 
