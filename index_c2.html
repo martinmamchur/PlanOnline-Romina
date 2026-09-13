@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- Build: 2026-09-13 01:59:01 -->
+<!-- Build: 2026-09-13 02:00:54 -->
+<!--  2026-09-13 01:59:01 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
@@ -2163,9 +2164,9 @@ function _showError(msg, detail) {
 function renderHeader() {
   const nameEl = document.getElementById('student-name-display');
   const nameInput = document.getElementById('student-name-input');
-  nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
+  if(nameEl) nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
 
-  document.getElementById('date-range').textContent = dateRange();
+  const drEl = document.getElementById('date-range'); if(drEl) drEl.textContent = dateRange();
   document.getElementById('completed-count').textContent = completedWeeks();
 
   const cw = completedWeeks();
