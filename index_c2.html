@@ -142,30 +142,6 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
 .block-bar{height:6px;border-radius:3px;background:var(--surface3);overflow:hidden;margin-top:8px;}
 .block-bar-fill{height:100%;background:var(--accent);border-radius:3px;}
 
-/* Guide */
-.guide-hero{background:var(--lime);color:#0a0a0a;border-radius:12px;padding:20px 18px;margin-bottom:18px;}
-.guide-hero h2{font-size:19px;font-weight:800;margin-bottom:6px;font-family:system-ui,sans-serif;}
-.guide-hero p{font-size:13.5px;line-height:1.6;opacity:.85;}
-.accordion{margin-bottom:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;}
-.acc-header{width:100%;text-align:left;padding:14px 16px;background:transparent;border:none;
-  display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:700;
-  color:var(--text);cursor:pointer;}
-.acc-toggle{color:var(--accent);font-size:18px;font-family:'JetBrains Mono',monospace;}
-.acc-body{padding:0 16px 16px;font-size:13.5px;line-height:1.7;color:var(--dim);display:none;}
-.acc-body.open{display:block;}
-.acc-body table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;}
-.acc-body th{padding:8px;text-align:left;border:1px solid var(--border);background:var(--surface2);font-weight:600;color:var(--text);}
-.acc-body td{padding:8px;border:1px solid var(--border);}
-.acc-body ul,.acc-body ol{padding-left:18px;margin-top:4px;}
-.acc-body li{margin-bottom:4px;}
-.acc-body strong{color:var(--text);}
-.acc-body code{background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;}
-.config-box{margin-bottom:18px;padding:14px 16px;background:var(--surface);
-  border:1px solid var(--border);border-radius:10px;}
-.config-label{font-size:12.5px;color:var(--dim);margin-bottom:6px;display:block;}
-.config-input{padding:8px 10px;font-size:13.5px;border:1px solid var(--border);
-  border-radius:6px;background:var(--surface2);color:var(--text);}
-
 /* Header btn styles */
 .hbtn{font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 12px;border-radius:6px;
   letter-spacing:.06em;white-space:nowrap;cursor:pointer;transition:all .12s;}
@@ -256,19 +232,14 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
     <div id="header-btns">
       <button class="hbtn" onclick="reloadProgress()" style="border-color:var(--dim);color:var(--dim);font-size:11px;">🔄 Cargar mis datos</button>
     </div>
-      <div id="token-ui" style="display:none;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
-        <div style="font-size:11px;color:var(--dim);margin-bottom:6px;letter-spacing:.08em;text-transform:uppercase;">Token de GitHub para sincronizar</div>
-        <div style="display:flex;gap:8px;">
-          <input id="token-input" type="password" placeholder="ghp_..." style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:#1a1a1a;color:#fff;font-size:13px;"/>
-          <button onclick="saveTokenAndClose()" style="padding:8px 14px;border-radius:6px;border:1px solid var(--lime);background:transparent;color:var(--lime);font-size:13px;cursor:pointer;">Guardar</button>
-          <button onclick="showTokenUI()" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:13px;cursor:pointer;">Cancelar</button>
-        </div>
-        <div style="font-size:11px;color:var(--dim);margin-top:6px;">El token se guarda solo en este navegador.</div>
-      </div>
       <button class="hbtn hbtn-dim" onclick="resetAll()">REINICIAR DATOS</button>
     </div>
   </div>
   <div id="readonly-banner" style="display:none;margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);">Modo lectura activado — no se puede editar nada en este dispositivo, y no se sube nada a la nube por accidente.</div>
+  <div id="date-range-wrap" class="mono" style="margin-top:8px;font-size:12px;color:var(--faint);">
+    RANGO: <span id="date-range" onclick="startEditDate()" style="cursor:pointer;color:var(--accent);border-bottom:1px dashed var(--accent);">—</span>
+    <input id="date-input" type="date" style="display:none;font-size:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;" onchange="commitDate()"/>
+  </div>
   <div id="progress-bar-wrap">
     <div id="progress-label">
       <div class="mono" style="font-size:11px;color:var(--faint);letter-spacing:.1em;">PROGRESO DEL PLAN</div>
@@ -343,34 +314,20 @@ async function reloadProgress(){
 
 async function ghGetVideos() {
   try {
-    // Intentar leer videos.json del repositorio público (no requiere token)
-    const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
-    const res = await fetch(url);
+    const res = await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=videos.json&t='+Date.now());
     if (!res.ok) return null;
     return await res.json();
   } catch(e) { return null; }
 }
 
 async function ghSaveVideos(videos) {
-  if (!GH_TOKEN || GH_TOKEN === 'PEGAR_TOKEN_AQUI') return false;
   try {
-    const apiUrl = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
-    // Primero obtener el SHA actual del archivo (necesario para actualizarlo)
-    const headers = {
-      'Authorization': `token ${GH_TOKEN}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-    };
-    let sha = null;
-    try {
-      const getRes = await fetch(apiUrl, { headers });
-      if (getRes.ok) { const data = await getRes.json(); sha = data.sha; }
-    } catch(e) {}
-
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(videos, null, 2))));
-    const body = { message: 'Actualizar videos', content, ...(sha ? { sha } : {}) };
-    const putRes = await fetch(apiUrl, { method: 'PUT', headers, body: JSON.stringify(body) });
-    return putRes.ok;
+    const res = await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=videos.json', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(videos)
+    });
+    return res.ok;
   } catch(e) { return false; }
 }
 
@@ -711,7 +668,7 @@ function adaptSession(session,timeMode,energyMode,_week,_dayIdx){
   const isCircuito=session.dayType==='circuito';
   if(timeMode==='normal'&&energyMode==='high')return{...s,ceoMod:null,ceoBadge:'normal',ceoNote:null};
   let badge='normal',note='';
-  function adjRIR(rir,d){if(!rir)return rir;return rir.replace(/RIR (\d+)/,(_,n)=>'RIR '+(parseInt(n)+d));}
+  function adjRIR(rir,d){if(!rir)return rir;return rir.replace(/RIR (\d+)(?:-(\d+))?/,(m,n1,n2)=>{const a=parseInt(n1)+d;return n2!==undefined?'RIR '+a+'-'+(parseInt(n2)+d):'RIR '+a;});}
   if(isCircuito){
     // Aplicar variante de formato según energía
     const applyVariants = (blockC, energy) => {
@@ -1155,109 +1112,6 @@ function renderStats() {
 }
 
 /* ============================================================
-   RENDER: GUIDE TAB
-   ============================================================ */
-const GUIDE_SECTIONS = [
-  { id:'config', title:'⚙️ Configuración del plan', content: () => {
-    const box = h('div', null);
-    box.appendChild(h('label', {className:'config-label'}, 'Fecha de inicio del plan (para calcular el rango de 8 semanas)'));
-    const dateInput = h('input', {type:'date', className:'config-input', value: state.planStart||''});
-    dateInput.addEventListener('change', () => {
-      state.planStart = dateInput.value;
-      save(); renderHeader();
-    });
-    box.appendChild(dateInput);
-    return box;
-  }},
-  { id:'macros', title:'🍽️ Cómo gestionar tus macronutrientes', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<p>Tu objetivo es <strong>ganar masa muscular en tren inferior</strong>. El enfoque es un <strong>superávit calórico leve</strong> con <strong>proteína alta</strong> — suficiente combustible para construir sin ganar grasa innecesaria.</p>
-    <table><thead><tr><th>Macronutriente</th><th>Rango orientativo</th><th>Por qué</th></tr></thead>
-    <tbody>
-    <tr><td><strong>Proteína</strong></td><td>1.8 - 2.2 g por kg / día</td><td>Material de construcción del músculo — prioridad absoluta.</td></tr>
-    <tr><td><strong>Carbohidratos</strong></td><td>3 - 4 g por kg en días de entreno</td><td>Combustible directo para tus sesiones de fuerza.</td></tr>
-    <tr><td><strong>Grasas</strong></td><td>0.8 - 1 g por kg / día</td><td>Soporte hormonal y articular.</td></tr>
-    </tbody></table>
-    <p style="margin-top:10px"><strong>En la práctica:</strong> en cada comida, llenás 1/3 del plato con proteína (tamaño de tu palma), añadís carbohidratos según el día (más en días de pierna), y completás con vegetales y una grasa saludable.</p>`;
-    return d;
-  }},
-  { id:'platos', title:'🥗 Ideas de platos por comida', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<p><strong>Desayunos:</strong></p><ul><li>Huevos revueltos (2-3) + avena con fruta + frutos secos</li><li>Yogur griego natural + granola + frutos rojos + chía</li><li>Tostadas integrales + palta + huevo pochado + tomate</li></ul>
-    <p><strong>Almuerzos / cenas:</strong></p><ul><li>Pollo a la plancha + arroz integral o quinoa + ensalada</li><li>Salmón al horno + batata asada + brócoli al vapor</li><li>Carne magra salteada + vegetales + arroz</li><li>Lentejas o garbanzos guisados + verduras</li></ul>
-    <p><strong>Colaciones:</strong></p><ul><li>Fruta + un puñado de almendras</li><li>Yogur proteico + canela</li><li>Batido de proteína + plátano (ideal post-entrenamiento)</li></ul>`;
-    return d;
-  }},
-  { id:'timing', title:'⏱️ Timing de comidas y entrenamiento', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<ul><li><strong>Antes de entrenar (1-2h):</strong> carbohidratos de fácil digestión + algo de proteína (ej. tostada con huevo, o fruta con yogur).</li>
-    <li><strong>Después de entrenar (dentro de 1-2h):</strong> priorizá proteína de calidad — es cuando el cuerpo mejor reconstruye el músculo trabajado.</li>
-    <li><strong>Hidratación:</strong> 2-2.5 litros de agua al día como base. La sed ya es una señal tardía — no esperes a sentirla.</li></ul>`;
-    return d;
-  }},
-  { id:'carbcycling', title:'🔄 Distribución de carbohidratos según tu semana', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<p>Entre tus 3 días de pierna y tus clases de functional, tu semana tiene varios días de carga física real. No todos necesitan la misma cantidad de carbohidratos:</p>
-    <ul><li><strong>Días de pierna pesada (Día 1 y Día 3):</strong> tu carbohidrato más alto del día — el cuerpo lo usa mejor alrededor de las sesiones más demandantes.</li>
-    <li><strong>Días de tren superior (Martes/Jueves):</strong> carbohidratos en rango medio.</li>
-    <li><strong>Días sin entrenamiento:</strong> carbohidratos algo más bajos, manteniendo siempre la proteína alta.</li></ul>
-    <p style="margin-top:8px">No necesitás calcular esto al gramo — la idea es sentir más combustible disponible en los días más duros.</p>`;
-    return d;
-  }},
-  { id:'mitos', title:'🚫 Mitos que dejamos atrás', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<ul><li><strong>"Sudar mucho = quemar más grasa":</strong> el sudor es termorregulación, no indica gasto calórico.</li>
-    <li><strong>"Las grasas engordan":</strong> lo que determina el peso es el balance calórico total, no un macronutriente aislado.</li>
-    <li><strong>"Comer de noche engorda":</strong> lo relevante es el total del día, no la hora del reloj.</li>
-    <li><strong>"Hay que eliminar grupos de alimentos":</strong> la sostenibilidad a largo plazo le gana siempre a la restricción extrema.</li></ul>`;
-    return d;
-  }},
-  { id:'mentalidad', title:'💛 Una nota para los días difíciles', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<p>Vas a tener semanas con días sin ganas de entrenar, o comidas fuera del plan. Eso es parte normal del proceso.</p>
-    <p>Lo que construye el resultado de estos 3 meses no es ningún día perfecto aislado — es el promedio de tus decisiones a lo largo de las 8 semanas. Confiá en el proceso.</p>`;
-    return d;
-  }},
-  { id:'comousar', title:'📋 Cómo usar esta herramienta', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<ul><li>En la pestaña <strong>"Plan"</strong>, elegí el bloque de semana (S1 a S12) en curso.</li>
-    <li>Dentro de cada semana, navegá entre los días.</li>
-    <li>Registrá kg y repeticiones en cada serie — se guarda automáticamente en este dispositivo.</li>
-    <li>Pegá el link de video de cada ejercicio si tu entrenador te lo comparte.</li></ul>`,
-    d.innerHTML += `<div style="margin-top:12px;padding:12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--lime)">
-    <strong style="color:var(--text)">Cómo ve tu entrenador tu progreso:</strong> no hace falta que mandes nada — todo se guarda solo en la nube a medida que vas cargando pesos, reps y comentarios. Tu entrenador lo ve directo desde su celular tocando <strong>"🔄 ACTUALIZAR"</strong>.</div>`;
-    return d;
-  }},
-];
-
-function renderGuide() {
-  const c = document.getElementById('content');
-  c.innerHTML = '';
-
-  const hero = h('div', {className:'guide-hero'});
-  hero.appendChild(h('h2', null, 'Tu alimentación es el otro 70% del resultado'));
-  hero.appendChild(h('p', null, 'No existe rutina de entrenamiento, sin importar lo perfecta que sea, que compense una alimentación que no sostiene tu energía y tu recuperación. Esta guía no es una dieta rígida: es un mapa para que tomes mejores decisiones la mayoría de las veces.'));
-  c.appendChild(hero);
-
-  GUIDE_SECTIONS.forEach(sec => {
-    const acc = h('div', {className:'accordion'});
-    const header = h('button', {className:'acc-header'});
-    header.appendChild(document.createTextNode(sec.title));
-    const toggle = h('span', {className:'acc-toggle'}, '+');
-    header.appendChild(toggle);
-    const body = h('div', {className:'acc-body'});
-    body.appendChild(sec.content());
-    header.addEventListener('click', () => {
-      const open = body.classList.toggle('open');
-      toggle.textContent = open ? '−' : '+';
-    });
-    acc.appendChild(header);
-    acc.appendChild(body);
-    c.appendChild(acc);
-  });
-}
-
-/* ============================================================
    TAB SWITCHING
    ============================================================ */
 const RECIPES=[
@@ -1303,7 +1157,6 @@ function switchTab(tab) {
   if (tab === 'plan') renderPlan();
   else if (tab === 'stats') renderStats();
   else if(tab==='recetas') renderRecipes();
-  else renderGuide();
 }
 
 /* ============================================================
@@ -1328,6 +1181,25 @@ function commitName() {
   renderHeader();
 }
 
+function startEditDate() {
+  if (isReadOnlyMode()) return;
+  const display = document.getElementById('date-range');
+  const input = document.getElementById('date-input');
+  input.value = state.planStart || '';
+  display.style.display = 'none';
+  input.style.display = 'inline-block';
+  input.focus();
+}
+function commitDate() {
+  const input = document.getElementById('date-input');
+  const display = document.getElementById('date-range');
+  state.planStart = input.value;
+  save();
+  input.style.display = 'none';
+  display.style.display = 'inline';
+  renderHeader();
+}
+
 /* ============================================================
    EXPORT / IMPORT
    ============================================================ */
@@ -1336,7 +1208,7 @@ function resetAll() {
   if (isReadOnlyMode()) { showSyncMsg('Desactivá el modo lectura para poder reiniciar datos','err'); return; }
   if (!confirm('Esto borrará todo el registro guardado (series, videos, sesiones completadas y nombre). ¿Seguro?')) return;
   state.logData = {}; state.videos = {}; state.sessionDone = {};
-  state.studentName = 'Florencia'; state.planStart = '';
+  state.studentName = 'Romina Cardoso'; state.planStart = '';
   save(); renderHeader(); switchTab('plan');
 }
 
@@ -1500,8 +1372,8 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
 
   // Coach note
   const noteText = isCardio ? 'Respetá el ritmo indicado de RPE.' : isCircuito
-    ? `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Prestá atención a la técnica en cada ronda — la velocidad viene después.`
-    : `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y la técnica en cada ejercicio.`;
+    ? `Semana ${week}/8 · ${getWeekMeso(week).subtitle}. Prestá atención a la técnica en cada ronda — la velocidad viene después.`
+    : `Semana ${week}/8 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y la técnica en cada ejercicio.`;
   frag.appendChild(h('div', {className:'coach-note'},
     h('strong', null, 'Nota del coach: '), noteText
   ));
