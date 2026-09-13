@@ -1359,14 +1359,6 @@ async function _boot() {
     if (ghVideos && typeof ghVideos === 'object') { state.videos = ghVideos; save(); }
   } catch(e) {}
   try {
-    const p = await ghLoadProgress();
-    if (p && p.logData && p.app === 'plan-florencia-ceo-c2') {
-      state.logData = p.logData; state.sessionDone = p.sessionDone||{};
-      if(p.planStart) state.planStart = p.planStart;
-      storageSet('logData',state.logData); storageSet('sessionDone',state.sessionDone); storageSet('planStart',state.planStart);
-    }
-  } catch(e) {}
-  try {
     const c1 = await ghLoadCiclo1();
     if (c1 && c1.logData) state.logDataC1 = c1.logData;
   } catch(e) {}
