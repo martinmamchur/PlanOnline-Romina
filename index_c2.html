@@ -303,6 +303,18 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
 <script>
 'use strict';
 
+
+let state = {
+  tab: 'plan',
+  week: 1,
+  day: 0,
+  studentName: storageGet('studentName', 'Romina Cardoso'),
+  planStart: storageGet('planStart', ''),
+  logData: storageGet('logData', {}),
+  videos: storageGet('videos', {}), // cache local, se sincroniza con GitHub al cargar
+  sessionDone: storageGet('sessionDone', {}),
+};
+
 /* ============================================================
    STORAGE
    ============================================================ */
