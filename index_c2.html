@@ -17,7 +17,6 @@
   --bg:#0a0a0a; --surface:#161616; --surface2:#1d1d1d; --surface3:#232323;
   --border:#2b2b2b; --accent:#82b7d9; --accent-dim:#0f1e2d;
   --lime:#82b7d9; --text:#f2f0ec; --dim:#9a9a96; --faint:#5e5e5b;
-  --knee:#fb923c;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100%;}
@@ -90,7 +89,6 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
 
 /* Exercise card */
 .ex-card{background:var(--surface);border-radius:10px;padding:14px 16px;margin-bottom:10px;}
-.ex-card.knee{border:1px solid rgba(251,146,60,.4);}
 .ex-card.normal{border:1px solid var(--border);}
 .ex-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
 .ex-name{font-weight:700;font-size:15.5px;color:var(--text);display:flex;align-items:center;gap:8px;}
@@ -100,8 +98,6 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
   border:1px solid var(--border);color:var(--dim);}
 .pill-accent{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
 .ex-rest{font-size:12.5px;color:var(--dim);}
-.ex-note-knee{font-size:12.5px;color:var(--knee);margin-top:8px;padding:9px 11px;
-  background:rgba(251,146,60,.06);border-radius:7px;border-left:3px solid var(--knee);line-height:1.6;}
 .ex-note{font-size:12.5px;color:var(--text);margin-top:8px;padding:9px 11px;
   background:var(--surface2);border-radius:7px;border-left:3px solid var(--lime);}
 
@@ -113,16 +109,6 @@ input::placeholder,textarea::placeholder{color:var(--faint);}
   text-decoration:none;border:1px solid var(--accent);border-radius:6px;padding:6px 9px;
   letter-spacing:.03em;white-space:nowrap;}
 .video-saved{font-size:11px;color:var(--lime);}
-
-/* Knee scale */
-.knee-box{margin-top:10px;padding:10px 12px;background:rgba(251,146,60,.08);
-  border:1px solid rgba(251,146,60,.35);border-radius:8px;}
-.knee-title{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;
-  color:var(--knee);font-weight:700;margin-bottom:8px;text-transform:uppercase;}
-.knee-btns{display:flex;gap:6px;flex-wrap:wrap;}
-.knee-btn{padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:700;
-  border:1px solid var(--border);background:var(--surface2);color:var(--faint);cursor:pointer;transition:all .12s;}
-.knee-warning{font-size:12px;color:var(--knee);margin-top:8px;line-height:1.5;}
 
 /* Log table */
 .log-section{margin-top:14px;}
@@ -922,7 +908,7 @@ function renderExCard(week, dayIdx, phase, idx, exObj) {
   const numSets = typeof exObj.sets === 'number' ? exObj.sets : 1;
   const setsArr = entry.sets.length === numSets ? entry.sets : Array.from({length:numSets},(_,i)=>entry.sets[i]||{kg:'',reps:''});
 
-  const card = h('div', {className:'ex-card ' + (exObj.kneeAlert ? 'knee' : 'normal')});
+  const card = h('div', {className:'ex-card normal'});
   card.style.cssText = 'padding:0;overflow:hidden;';
   const cardHeader = document.createElement('div');
   cardHeader.style.cssText = 'padding:12px 14px 10px 14px;cursor:pointer;';
@@ -961,12 +947,6 @@ function renderExCard(week, dayIdx, phase, idx, exObj) {
   card.appendChild(cardHeader);
   cardBody.appendChild(h('div', {className:'ex-rest', style:'padding-top:8px;'}, 'Descanso: ' + exObj.rest));
 
-  // Knee note
-  if (exObj.kneeAlert) {
-    cardBody.appendChild(h('div', {className:'ex-note-knee'},
-      h('strong', null, 'Rodilla: '), getKneeNote(exObj.name)
-    ));
-  }
   // General note
   if (exObj.notes) {
     cardBody.appendChild(h('div', {className:'ex-note'}, exObj.notes));
@@ -1020,43 +1000,6 @@ function renderExCard(week, dayIdx, phase, idx, exObj) {
   vidInputRow.appendChild(playBtn);
   vidWrap.appendChild(vidInputRow);
   cardBody.appendChild(vidWrap);
-
-  // Knee scale (only if kneeAlert)
-  if (exObj.kneeAlert) {
-    const kbox = h('div', {className:'knee-box'});
-    kbox.appendChild(h('div', {className:'knee-title'}, '🦴 Sensación de rodilla hoy'));
-    const kbtns = h('div', {className:'knee-btns'});
-    KNEE_SCALE.forEach(k => {
-      const btn = h('button', {className:'knee-btn'}, `${k.val} — ${k.label}`);
-      const current = entry.kneeSensation;
-      if (current === k.val) {
-        btn.style.border = `2px solid ${k.color}`;
-        btn.style.background = k.color + '22';
-        btn.style.color = k.color;
-      }
-      btn.disabled = isReadOnlyMode();
-      btn.addEventListener('click', () => {
-        if (isReadOnlyMode()) return;
-        const e2 = state.logData[logKey] || {sets:setsArr, comment:'', kneeSensation:null};
-        e2.kneeSensation = k.val;
-        state.logData[logKey] = e2;
-        save();
-        // Re-render just this card
-        const newCard = renderExCard(week, dayIdx, phase, idx, exObj);
-        card.replaceWith(newCard);
-      });
-      kbtns.appendChild(btn);
-    });
-    kbox.appendChild(kbtns);
-    const cur = entry.kneeSensation;
-    if (cur !== null && cur !== undefined && cur >= 3) {
-      const msg = cur >= 5 ? 'Detené el ejercicio y anotá en comentarios. Avisale a tu entrenador.'
-        : cur === 4 ? 'Reducí la carga al 70% o pasá a la regresión. Avisale hoy.'
-        : 'Reducí el rango de movimiento y la carga. Controlá al final de la sesión.';
-      kbox.appendChild(h('div', {className:'knee-warning'}, '⚠️ ' + msg));
-    }
-    card.appendChild(kbox);
-  }
 
   // Log table
   const logSection = h('div', {className:'log-section'});
@@ -1235,7 +1178,7 @@ const GUIDE_SECTIONS = [
     <tbody>
     <tr><td><strong>Proteína</strong></td><td>1.8 - 2.2 g por kg / día</td><td>Material de construcción del músculo — prioridad absoluta.</td></tr>
     <tr><td><strong>Carbohidratos</strong></td><td>3 - 4 g por kg en días de entreno</td><td>Combustible directo para tus sesiones de fuerza.</td></tr>
-    <tr><td><strong>Grasas</strong></td><td>0.8 - 1 g por kg / día</td><td>Soporte hormonal y articular — especialmente importante para la rodilla.</td></tr>
+    <tr><td><strong>Grasas</strong></td><td>0.8 - 1 g por kg / día</td><td>Soporte hormonal y articular.</td></tr>
     </tbody></table>
     <p style="margin-top:10px"><strong>En la práctica:</strong> en cada comida, llenás 1/3 del plato con proteína (tamaño de tu palma), añadís carbohidratos según el día (más en días de pierna), y completás con vegetales y una grasa saludable.</p>`;
     return d;
@@ -1263,17 +1206,6 @@ const GUIDE_SECTIONS = [
     <p style="margin-top:8px">No necesitás calcular esto al gramo — la idea es sentir más combustible disponible en los días más duros.</p>`;
     return d;
   }},
-  { id:'rodilla', title:'🦴 Tu rodilla — cómo entrenar inteligente con ella', content: () => {
-    const d = h('div', null);
-    d.innerHTML = `<p>Tu diagnóstico de rótula ascendente hace que ciertos ejercicios carguen la articulación de forma diferente. Con la dosis correcta de carga, rango y seguimiento, se puede entrenar con total eficacia.</p>
-    <p><strong>Los ejercicios marcados con 🦴</strong> tienen una escala de sensación del 0 al 5. Usála en cada sesión:</p>
-    <ul><li><strong>0-2 (verde):</strong> todo bien, entrenás normal.</li>
-    <li><strong>3 (amarillo):</strong> reducís el rango o la carga un 20%, completás y avisás.</li>
-    <li><strong>4 (naranja):</strong> bajás la carga al 70% o pasás a la regresión. Avisás ese día.</li>
-    <li><strong>5 (rojo):</strong> parás, anotás y avisás. Sin heroísmo.</li></ul>
-    <p style="margin-top:8px">Los omega-3 (salmón, nueces, chía) y la vitamina C (frutas y vegetales frescos) tienen evidencia de soporte en la salud articular. No son mágicos, pero suman.</p>`;
-    return d;
-  }},
   { id:'mitos', title:'🚫 Mitos que dejamos atrás', content: () => {
     const d = h('div', null);
     d.innerHTML = `<ul><li><strong>"Sudar mucho = quemar más grasa":</strong> el sudor es termorregulación, no indica gasto calórico.</li>
@@ -1284,7 +1216,7 @@ const GUIDE_SECTIONS = [
   }},
   { id:'mentalidad', title:'💛 Una nota para los días difíciles', content: () => {
     const d = h('div', null);
-    d.innerHTML = `<p>Vas a tener semanas donde la rodilla moleste más, días sin ganas de entrenar, o comidas fuera del plan. Eso es parte normal del proceso.</p>
+    d.innerHTML = `<p>Vas a tener semanas con días sin ganas de entrenar, o comidas fuera del plan. Eso es parte normal del proceso.</p>
     <p>Lo que construye el resultado de estos 3 meses no es ningún día perfecto aislado — es el promedio de tus decisiones a lo largo de las 8 semanas. Confiá en el proceso.</p>`;
     return d;
   }},
@@ -1548,7 +1480,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   const isDone = !!state.sessionDone[doneKey];
 
   // Badge
-  const badgeText = isUpper ? 'Tren Superior' : isCardio ? 'Cardio' : 'Pierna 🦴';
+  const badgeText = isUpper ? 'Tren Superior' : isCardio ? 'Cardio' : 'Pierna';
   const badgeEl = h('div', {id:'session-badge'},
     h('span', {className:'badge badge-' + (isUpper ? 'upper' : 'accent')}, badgeText)
   );
@@ -1579,7 +1511,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   // Coach note
   const noteText = isCardio ? 'Respetá el ritmo indicado de RPE.' : isUpper
     ? `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas — estas sesiones también forman parte de tu historial.`
-    : `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y prestá atención a la sensación de rodilla en los ejercicios marcados 🦴.`;
+    : `Semana ${week}/12 · ${getWeekMeso(week).subtitle}. Registrá tus cargas y la técnica en cada ejercicio.`;
   frag.appendChild(h('div', {className:'coach-note'},
     h('strong', null, 'Nota del coach: '), noteText
   ));
@@ -1701,12 +1633,6 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     faseDText
   ));
 
-  // Prog note
-  frag.appendChild(h('div', {className:'prog-note'},
-    h('div', {className:'phase-label'}, 'Progresión semanal — sobrecarga progresiva'),
-    h('p', {style:'font-size:13.5px;line-height:1.6;color:var(--dim)'}, WEEK_PROGRESSION_NOTES[week])
-  ));
-
   return frag;
 }
 
@@ -1775,15 +1701,6 @@ function getTechNote(name, reps) {
     text: 'En el punto de máxima tensión del ejercicio, mantenés la posición el tiempo indicado DENTRO de cada repetición (ej: 2 seg arriba en el hip thrust) antes de continuar.\n⏱ DESCANSO ENTRE SERIES: No cambia — seguís descansando el tiempo indicado entre series completas.'
   };
   return null;
-}
-
-function getKneeNote(name) {
-  const n = name.toLowerCase();
-  if (n.includes('step')) return KNEE_NOTES.step;
-  if (n.includes('zancada')) return KNEE_NOTES.zancada;
-  if (n.includes('b\u00falgara')) return KNEE_NOTES.bulg;
-  if (n.includes('prensa')) return KNEE_NOTES.prensa;
-  return KNEE_NOTES.default;
 }
 
 function getWeekMeso(week){
