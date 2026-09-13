@@ -243,6 +243,7 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
 .ciclo-item:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
 .ciclo-item-title{font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;color:#c49fd8;margin-bottom:5px;}
 .ciclo-item-text{font-family:'Outfit',sans-serif;font-size:13px;color:var(--text);line-height:1.75;}
+
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -267,20 +268,18 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
       </div>
     </div>
     <div id="header-btns">
-      
       <button class="hbtn" onclick="reloadProgress()" style="border-color:var(--dim);color:var(--dim);font-size:11px;">🔄 Cargar mis datos</button>
-      
-      <div id="sync-msg" style="font-size:12px;margin-top:4px;"></div>
+    </div>
       <div id="token-ui" style="display:none;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
         <div style="font-size:11px;color:var(--dim);margin-bottom:6px;letter-spacing:.08em;text-transform:uppercase;">Token de GitHub para sincronizar</div>
         <div style="display:flex;gap:8px;">
           <input id="token-input" type="password" placeholder="ghp_..." style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:#1a1a1a;color:#fff;font-size:13px;"/>
           <button onclick="saveTokenAndClose()" style="padding:8px 14px;border-radius:6px;border:1px solid var(--lime);background:transparent;color:var(--lime);font-size:13px;cursor:pointer;">Guardar</button>
-          
+          <button onclick="showTokenUI()" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:13px;cursor:pointer;">Cancelar</button>
         </div>
         <div style="font-size:11px;color:var(--dim);margin-top:6px;">El token se guarda solo en este navegador.</div>
       </div>
-      
+      <button class="hbtn hbtn-dim" onclick="resetAll()">REINICIAR DATOS</button>
     </div>
   </div>
   <div id="readonly-banner" style="display:none;margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);">Modo lectura activado — no se puede editar nada en este dispositivo, y no se sube nada a la nube por accidente.</div>
@@ -303,18 +302,6 @@ h1, h2, h3, .plan-name, #session-title { font-family:'Outfit',sans-serif; letter
 <script>
 'use strict';
 
-
-let state = {
-  tab: 'plan',
-  week: 1,
-  day: 0,
-  studentName: storageGet('studentName', 'Romina Cardoso'),
-  planStart: storageGet('planStart', ''),
-  logData: storageGet('logData', {}),
-  videos: storageGet('videos', {}), // cache local, se sincroniza con GitHub al cargar
-  sessionDone: storageGet('sessionDone', {}),
-};
-
 /* ============================================================
    STORAGE
    ============================================================ */
@@ -328,304 +315,184 @@ function storageSet(key, val) {
   try { localStorage.setItem(PREFIX + key, JSON.stringify(val)); } catch(e) {}
 }
 
-/* ============================================================
-   GITHUB VIDEOS — lee videos.json del repositorio y lo actualiza
-   El token se incrusta en el HTML — solo el coach tiene este archivo
-   ============================================================ */
-const GH_USER  = 'martinmamchur';
-const GH_REPO  = 'PlanOnline-Romina';
-const GH_FILE  = 'videos.json';
-const GH_TOKEN = 'PEGAR_TOKEN_AQUI'; // <-- pegá tu token acá antes de subir a GitHub
+(function(){
+  const K='__rominaceo2_v1__';
+  if(!localStorage.getItem(K)){
+    Object.keys(localStorage).forEach(k=>{if(k.startsWith('romina'))localStorage.removeItem(k);});
+    localStorage.setItem(K,'1');
+  }
+})();
 
-async function ghGetVideos() {
-  try {
-    // Intentar leer videos.json del repositorio público (no requiere token)
-    const url = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/${GH_FILE}?t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch(e) { return null; }
+
+
+function isReadOnlyMode() { return false; }
+
+function save() {
+  storageSet('logData', state.logData);
+  storageSet('sessionDone', state.sessionDone);
+  storageSet('planStart', state.planStart);
+  if(save._t) clearTimeout(save._t);
+  save._t = setTimeout(()=>ghSaveProgress(), 4000);
 }
 
-async function ghSaveVideos(videos) {
-  if (!GH_TOKEN || GH_TOKEN === 'PEGAR_TOKEN_AQUI') return false;
-  try {
-    const apiUrl = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
-    // Primero obtener el SHA actual del archivo (necesario para actualizarlo)
-    const headers = {
-      'Authorization': `token ${GH_TOKEN}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-    };
-    let sha = null;
-    try {
-      const getRes = await fetch(apiUrl, { headers });
-      if (getRes.ok) { const data = await getRes.json(); sha = data.sha; }
-    } catch(e) {}
+/* ============================================================ GITHUB PROGRESS SYNC */
+/* ============================================================ GITHUB PROGRESS SYNC */
+const WORKER_URL = 'https://impetus-sync.martinmamchur.workers.dev';
+const WORKER_REPO = 'PlanOnline-Romina';
 
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(videos, null, 2))));
-    const body = { message: 'Actualizar videos', content, ...(sha ? { sha } : {}) };
-    const putRes = await fetch(apiUrl, { method: 'PUT', headers, body: JSON.stringify(body) });
-    return putRes.ok;
-  } catch(e) { return false; }
+function showSyncMsg(text,type){const el=document.getElementById('sync-msg');if(!el)return;el.textContent=text;el.style.color=type==='ok'?'var(--ceo-blue)':type==='err'?'#ff6b6b':'var(--dim)';if(text)setTimeout(()=>{el.textContent='';},3000);}
+
+async function ghLoadProgress(){try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso_c2.json&t='+Date.now());if(!res.ok)return null;return await res.json();}catch(e){return null;}}
+async function ghLoadCiclo1(){try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso.json&t='+Date.now());if(!res.ok)return null;return await res.json();}catch(e){return null;}}
+async function ghSaveProgress(){showSyncMsg('Sincronizando...','');const data={app:'plan-romina-ceo-c2',exportedAt:new Date().toISOString(),planStart:state.planStart,logData:state.logData,videos:state.videos,sessionDone:state.sessionDone};try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso_c2.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){showSyncMsg('☁ Sincronizado','ok');}else{showSyncMsg('✗ Error ('+res.status+')','err');}}catch(e){showSyncMsg('✗ Error','err');}}
+async function reloadProgress(){
+  showSyncMsg('Actualizando...','');
+  try {
+    const p = await ghLoadProgress();
+    if(p && p.logData && p.app==='plan-romina-ceo-c2'){
+      state.logData=p.logData; state.sessionDone=p.sessionDone||{};
+      if(p.planStart) state.planStart=p.planStart;
+      storageSet('logData',state.logData); storageSet('sessionDone',state.sessionDone); storageSet('planStart',state.planStart);
+    }
+    const c1 = await ghLoadCiclo1();
+    if(c1 && c1.logData) state.logDataC1 = c1.logData;
+    renderHeader(); renderPlan();
+    showSyncMsg('✓ Actualizado','ok');
+  } catch(e){ showSyncMsg('✗ Error','err'); }
 }
 
-/* ============================================================
-   PROGRAM DATA
-   ============================================================ */
+/* ============================================================ VIDEOS */
+
+
+/* ============================================================ PROGRAM DATA */
 const MESOCYCLES = [
-  { id:'m1', name:'Bloque 1', subtitle:'Base aeróbica + hipertrofia', weeks:[1,2,3,4], focus:'Acumulación de volumen · RIR 3→2' },
-  { id:'m2', name:'Bloque 2', subtitle:'Intensificación', weeks:[5,6,7,8], focus:'Densidad y superseries · RIR 2→1' },
-  { id:'m3', name:'Bloque 3', subtitle:'Pico estético-fuerza', weeks:[9,10,11,12], focus:'Picos de esfuerzo · RIR 1→0, circuitos' },
+  { id:'m1', name:'Bloque 1', subtitle:'Consolidación de fuerza', weeks:[1,2,3,4], focus:'Progresión desde los picos del C1 · RIR 2→1 · Volumen moderado' },
+  { id:'m2', name:'Bloque 2', subtitle:'Hipertrofia avanzada', weeks:[5,6,7,8], focus:'Técnicas avanzadas · Myo-reps, drop sets, AMRAP · RIR 1→0' },
 ];
 
-// Helper to build a video field placeholder object
-const vid = () => ({ url: '' });
-
-// Each "exercise" has: name, sets, reps, intensity (RIR), rest, notes
-function buildSession(dayLabel, dayFocus, warmup, blockB, blockC, blockD){
-  return { dayLabel, dayFocus, warmup, blockB, blockC, blockD };
-}
-
-// ---------- WEEK TEMPLATES ----------
-// We define 3 base templates (one per mesociclo) then tweak RIR/notes per week via progression text.
-
-const WARMUP_GENERAL = [
-  'Movilidad de cadera 90/90 — 6 reps c/lado',
-  'Gato-camello — 8 reps',
-  'Puente de glúteo activación — 12 reps',
-  'Sentadilla con peso corporal — 10 reps',
-  'Círculos de hombro + banda face pull — 12 reps',
-];
-
-const WARMUP_CARDIO = [
-  'Marcha rápida o trote suave — 3 min',
-  'Movilidad de tobillo y cadera dinámica — 2 min',
-  'Skipping bajo + talones a glúteo — 1 min c/u',
-];
-
-// ---- MESOCICLO 1 (semanas 1-4): variantes nuevas vs. plan previo ----
-const M1_DAY1 = {
-  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (tren completo)',
-  blockB:[
-    { name:'Sentadilla búlgara c/mancuernas', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
-    { name:'Press banca c/barra', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
-  ],
-  blockC:[
-    { name:'Remo en polea baja agarre neutro', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
-    { name:'Zancada caminando c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'60 seg' },
-    { name:'Elevación lateral mancuerna', sets:3, reps:'12-15', rir:'RIR 1-2', rest:'45 seg' },
-    { name:'Abducción de cadera en máquina', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
-  ],
-};
-
-const M1_DAY2 = {
-  dayLabel:'Día 2', dayFocus:'Core + acondicionamiento metabólico',
-  blockB:[
-    { name:'Plancha frontal con toques de hombro', sets:3, reps:'30-40 seg', rir:'RIR 2', rest:'45 seg' },
-    { name:'Dead bug c/peso ligero', sets:3, reps:'10 c/lado', rir:'RIR 2', rest:'45 seg' },
-  ],
-  blockC:[
-    { name:'EMOM 14 min — Bloque metabólico', sets:1, reps:'Ver indicaciones', rir:'RPE 7-8', rest:'—',
-      notes:'Cada minuto, en este orden rotando: Min1 Remo en máquina 250m · Min2 Sentadilla goblet x12 · Min3 Push-ups x10 · Min4 Mountain climbers x20 · Min5 Burpee x6 (sustituible por step-up si necesita regresión) · Min6 descanso activo caminando. Repetir el ciclo 2 veces.' },
-  ],
-};
-
-const M1_DAY3 = {
-  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción',
-  blockB:[
-    { name:'Peso muerto rumano unilateral c/mancuerna', sets:4, reps:'8-10 c/lado', rir:'RIR 3', rest:'90 seg' },
-    { name:'Jalón al pecho agarre amplio', sets:4, reps:'8-10', rir:'RIR 3', rest:'90 seg' },
-  ],
-  blockC:[
-    { name:'Hip thrust c/barra', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
-    { name:'Press militar con mancuernas sentada', sets:3, reps:'10-12', rir:'RIR 2', rest:'60 seg' },
-    { name:'Curl femoral en máquina/banco', sets:3, reps:'12', rir:'RIR 1-2', rest:'45 seg' },
-    { name:'Face pull en polea', sets:3, reps:'15', rir:'RIR 1-2', rest:'45 seg' },
-  ],
-};
-
-const M1_DAY4 = {
-  dayLabel:'Día 4', dayFocus:'Cardio LISS + movilidad',
-  blockB:[
-    { name:'Caminadora inclinada (LISS)', sets:1, reps:'30-40 min', rir:'RPE 4-5', rest:'—',
-      notes:'Inclinación 6-8%, ritmo conversacional (puedes hablar en frases cortas).' },
-  ],
-  blockC:[
-    { name:'Movilidad torácica + cadera (circuito libre)', sets:2, reps:'8-10 min total', rir:'RPE 2-3', rest:'—' },
-  ],
-};
-
-// ---- MESOCICLO 2 (semanas 5-8): superseries, mayor densidad ----
-const M2_DAY1 = {
-  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (superserie)',
-  blockB:[
-    { name:'Sentadilla frontal c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
-    { name:'Press inclinado c/mancuernas', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
-  ],
-  blockC:[
-    { name:'SS A1: Step up c/mancuernas', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'15 seg → enlazar con A2' },
-    { name:'SS A2: Remo mancuerna a un brazo', sets:3, reps:'10 c/lado', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
-    { name:'SS B1: Elevación lateral en polea', sets:3, reps:'12-15', rir:'RIR 1', rest:'15 seg → enlazar con B2' },
-    { name:'SS B2: Abducción de cadera de pie en polea', sets:3, reps:'12-15 c/lado', rir:'RIR 1', rest:'60 seg tras la pareja' },
-  ],
-};
-
-const M2_DAY2 = {
-  dayLabel:'Día 2', dayFocus:'Core + HIIT por intervalos',
-  blockB:[
-    { name:'Plancha lateral c/elevación de cadera', sets:3, reps:'10-12 c/lado', rir:'RIR 2', rest:'45 seg' },
-    { name:'Rueda abdominal o press pallof', sets:3, reps:'8-10', rir:'RIR 2', rest:'45 seg' },
-  ],
-  blockC:[
-    { name:'HIIT — Intervalos 40/20', sets:8, reps:'40 seg trabajo / 20 seg pausa', rir:'RPE 8-9', rest:'20 seg entre rondas',
-      notes:'Bici/Assault bike o sprint en caminadora. 8 rondas = 8 min totales. Progresar intensidad cada semana, no duración.' },
-  ],
-};
-
-const M2_DAY3 = {
-  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción (superserie)',
-  blockB:[
-    { name:'Peso muerto convencional c/barra', sets:4, reps:'6-8', rir:'RIR 2', rest:'2 min' },
-    { name:'Dominadas asistidas o jalón supino', sets:4, reps:'8-10', rir:'RIR 2', rest:'90 seg' },
-  ],
-  blockC:[
-    { name:'SS A1: Leg press pies altos', sets:3, reps:'10-12', rir:'RIR 1-2', rest:'15 seg → enlazar' },
-    { name:'SS A2: Push press c/mancuernas', sets:3, reps:'8-10', rir:'RIR 1-2', rest:'60 seg tras la pareja' },
-    { name:'Curl femoral nórdico asistido o en máquina', sets:3, reps:'8-10', rir:'RIR 1', rest:'45 seg' },
-    { name:'Face pull + rotación externa banda', sets:3, reps:'15', rir:'RIR 1', rest:'45 seg' },
-  ],
-};
-
-const M2_DAY4 = {
-  dayLabel:'Día 4', dayFocus:'Cardio ondulante + core',
-  blockB:[
-    { name:'Caminadora inclinada (LISS progresivo)', sets:1, reps:'35-45 min', rir:'RPE 5', rest:'—',
-      notes:'Subir inclinación o velocidad ligeramente respecto a Mesociclo 1.' },
-  ],
-  blockC:[
-    { name:'Circuito core (3 rondas, sin pausa entre ejercicios)', sets:3, reps:'12-15 c/u', rir:'RPE 6', rest:'60 seg entre rondas',
-      notes:'Dead bug, bird dog, plancha con toque de rodilla.' },
-  ],
-};
-
-// ---- MESOCICLO 3 (semanas 9-12): pico, EMOM/circuitos nuevos ----
-const M3_DAY1 = {
-  dayLabel:'Día 1', dayFocus:'Pico de fuerza inferior + empuje',
-  blockB:[
-    { name:'Sentadilla trasera c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
-    { name:'Press banca c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
-  ],
-  blockC:[
-    { name:'Zancada búlgara con salto (regresión: sin salto)', sets:3, reps:'6-8 c/lado', rir:'RIR 1', rest:'60 seg' },
-    { name:'Remo en máquina T-bar', sets:3, reps:'8-10', rir:'RIR 1', rest:'60 seg' },
-    { name:'Elevación lateral myo-reps', sets:3, reps:'12 + mini-series de 5', rir:'RIR 0-1', rest:'30 seg' },
-  ],
-};
-
-const M3_DAY2 = {
-  dayLabel:'Día 2', dayFocus:'Core + circuito "For Time"',
-  blockB:[
-    { name:'Plancha con arrastre de mancuerna', sets:3, reps:'8 c/lado', rir:'RIR 1', rest:'45 seg' },
-  ],
-  blockC:[
-    { name:'For Time — 4 rondas lo más rápido posible (técnica primero)', sets:4, reps:'Ver indicaciones', rir:'RPE 8-9', rest:'Cronometrar tiempo total',
-      notes:'Por ronda: Kettlebell swing x15 · Box step-over x10 · Push-up x10 · Assault bike 250m. Anotar el tiempo total cada semana para medir progreso.' },
-  ],
-};
-
-const M3_DAY3 = {
-  dayLabel:'Día 3', dayFocus:'Pico cadena posterior + tracción',
-  blockB:[
-    { name:'Peso muerto rumano c/barra (pico)', sets:5, reps:'5', rir:'RIR 1', rest:'2-3 min' },
-    { name:'Jalón al pecho agarre cerrado (pico)', sets:5, reps:'5-6', rir:'RIR 1', rest:'2 min' },
-  ],
-  blockC:[
-    { name:'Hip thrust a una pierna', sets:3, reps:'8-10 c/lado', rir:'RIR 1', rest:'60 seg' },
-    { name:'Push press c/mancuernas', sets:3, reps:'6-8', rir:'RIR 1', rest:'60 seg' },
-    { name:'Face pull + curl femoral (superserie final)', sets:3, reps:'12-15 c/u', rir:'RIR 0-1', rest:'45 seg' },
-  ],
-};
-
-const M3_DAY4 = {
-  dayLabel:'Día 4', dayFocus:'Cardio pico + movilidad integral',
-  blockB:[
-    { name:'Caminadora inclinada (LISS pico)', sets:1, reps:'40-50 min', rir:'RPE 5-6', rest:'—' },
-  ],
-  blockC:[
-    { name:'HIIT corto opcional (si energía lo permite)', sets:6, reps:'30 seg fuerte / 30 seg suave', rir:'RPE 7', rest:'—',
-      notes:'Opcional según fatiga acumulada de la semana — escuchar al cuerpo en el cierre del mesociclo.' },
-  ],
-};
-
-const TEMPLATES = {
-  m1: [M1_DAY1, M1_DAY2, M1_DAY3, M1_DAY4],
-  m2: [M2_DAY1, M2_DAY2, M2_DAY3, M2_DAY4],
-  m3: [M3_DAY1, M3_DAY2, M3_DAY3, M3_DAY4],
-};
+function ex(name,sets,reps,rir,rest,opts){return{name,sets,reps,rir,rest,...(opts||{})};}
 
 const WEEK_PROGRESSION_NOTES = {
-  1: 'Semana de recalibración: usa cargas conservadoras (RIR 3-4) para grabar la técnica de los nuevos patrones (búlgara, RDL unilateral). No busques romper PRs.',
-  2: 'Si la técnica de semana 1 fue sólida, sube 2.5-5% de carga en los básicos manteniendo RIR 3.',
-  3: 'Doble progresión en accesorios: si llegaste al techo del rango de reps en las 3 series, sube peso la próxima semana y vuelve al rango bajo.',
-  4: 'Semana de consolidación — mismo peso que semana 3, pero bajamos a RIR 2 (un poco más de esfuerzo) antes de pasar de mesociclo.',
-  5: 'Nuevo bloque: las superseries reducen el descanso entre ejercicios pareados a 15 seg. Mantén técnica; si se degrada, alarga el descanso 10 seg.',
-  6: 'Sube carga en básicos 2.5-5% si la semana 5 se sintió en RIR 2-3. Mantén reps en superseries.',
-  7: 'Empuja a RIR 1-2 en accesorios. Si el HIIT de martes se sintió controlado, aumenta intensidad (no duración) del intervalo.',
-  8: 'Semana de consolidación del mesociclo: mismo peso que semana 7, foco en ejecutar cada repetición con control (tempo 2-0-1).',
-  9: 'Bloque de pico: bajamos repeticiones (5) y subimos intensidad relativa (RIR 1) en básicos. Las cargas pueden sentirse "pesadas mentalmente" — es esperado.',
-  10: 'Si el RIR real de semana 9 fue ≥2 (sobró margen), sube 2.5-5% en los básicos de pico.',
-  11: 'Penúltima semana: prioriza calidad técnica sobre cantidad. Si aparece fatiga acumulada alta, autoriza bajar 1 serie en accesorios.',
-  12: 'Semana de cierre y testeo: repite los mismos pesos de la semana 10-11 en los básicos para medir cuántas repeticiones extra logras a igual RIR — esa es tu métrica de progreso del trimestre.',
+  1:'Semana 1 — Arrancás el Ciclo 2 con las cargas de tu semana 10-11 del C1, no las de los picos (sem 12). RIR 2 real. Anotá todo — es tu base del C2.',
+  2:'Semana 2 — Si la técnica fue sólida, subí 2.5-5 kg en los básicos. Mantené RIR 2.',
+  3:'Semana 3 — Doble progresión: si llegaste al techo del rango de reps en las 3 series, subís peso la semana siguiente.',
+  4:'Semana 4 — Consolidación. Mismo peso que sem 3, RIR 1-2. Preparación para las técnicas avanzadas del Bloque 2.',
+  5:'Semana 5 — Bloque 2: empiezan las técnicas avanzadas. Bajá la carga un 10% respecto a sem 4 y ajustá progresivamente.',
+  6:'Semana 6 — Progresión en los básicos. En myo-reps y drop sets: anotá cuántas mini-series adicionales lográs.',
+  7:'Semana 7 — Pico de volumen. Cerca del fallo técnico en la última serie. Anotá sensaciones y recuperación.',
+  8:'Semana 8 — Semana de cierre. Testeo: en los For Time, comparás con semana 4. En básicos, intentás PR técnico.',
 };
 
-const PROG_NOTES = {
-  1:'Semana de recalibración: usá cargas conservadoras (RIR 3-4) en los básicos para grabar la técnica de los patrones nuevos (RDL con barra, sentadilla hack, sentadilla sumo). No busquemos romper marcas todavía.',
-  2:'Si la técnica de semana 1 fue sólida, subí 2.5-5% de carga en los básicos manteniendo RIR 3.',
-  3:'Doble progresión en accesorios: si llegaste al techo del rango de reps en las 3 series, subí peso la próxima semana y volvé al rango bajo.',
-  4:'Semana de consolidación — mismo peso que semana 3, pero bajamos a RIR 2 antes de pasar de bloque.',
-  5:'Nuevo bloque: las superseries reducen el descanso entre ejercicios pareados a 15 seg. Mantené técnica; si se degrada, alargá el descanso 10 seg.',
-  6:'Subí carga en básicos 2.5-5% si la semana 5 se sintió en RIR 2-3. Mantené el rango de reps en las superseries.',
-  7:'Empujá a RIR 1-2 en accesorios. Si el tempo lento en búlgara se sintió controlado, mantenerlo — es donde más se siente el trabajo de glúteo.',
-  8:'Semana de consolidación del bloque: mismo peso que semana 7, foco en ejecutar cada repetición con control (tempo 3-0-1 en básicos).',
-  9:'Bloque de pico: bajamos repeticiones (5-6) y subimos la intensidad relativa (RIR 1). Aparecen myo-reps y drop sets — técnicas para maximizar el estímulo sin sumar más series.',
-  10:'Si el RIR real de semana 9 fue ≥2, subí 2.5-5% en los básicos de pico. Empujá los myo-reps/drop sets a RIR 0.',
-  11:'Penúltima semana: priorizá calidad técnica sobre cantidad. Si hay fatiga acumulada alta, podés bajar 1 serie en accesorios.',
-  12:'Semana de cierre y testeo: repetí los mismos pesos de semana 10-11 en los básicos para medir cuántas reps extra lográs a igual RIR — esa es tu métrica real de los 3 meses.',
+// ── BLOQUE 1 (Sem 1-4) ───────────────────────────────────────────────────────
+const C2_M1_D1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (consolidación)',
+  blockB:[
+    ex('Sentadilla trasera c/barra',4,'6-8','RIR 2','2 min'),
+    ex('Press banca c/barra',4,'6-8','RIR 2','2 min'),
+  ],
+  blockC:[
+    ex('Sentadilla búlgara c/mancuernas',3,'8-10 c/lado','RIR 2','75 seg'),
+    ex('Remo en máquina T-bar',3,'8-10','RIR 2','60 seg'),
+    ex('Elevación lateral mancuerna',3,'12-15','RIR 1','45 seg'),
+    ex('Abducción de cadera en máquina',3,'15','RIR 1','45 seg'),
+  ],
+  blockD:{ type:'liss', label:'Cardio opcional', detail:'10 min caminadora inclinada nivel 7 si quedó tiempo' },
 };
 
-const KNEE_NOTES = {
-  default:'Este ejercicio puede cargar la rótula. Si la sensación llega a 3, reducí el rango de movimiento o la carga. Si llega a 4-5, sustituí por la regresión indicada y avisale a tu entrenador.',
-  step:'En step up: usá una altura de cajón baja (20-25 cm) y subí empujando con todo el pie. Si hay click o molestia al subir, detente y anotá.',
-  zancada:'En zancadas: acortá el paso si hay presión en la rótula. Evitá que la rodilla pase claramente por delante del pie.',
-  bulg:'En búlgara: colocá el pie delantero un poco más al frente y bajá controlado. Empujá desde el talón al subir.',
-  prensa:'En prensa: pies en posición media o un poco más arriba reduce el estrés sobre la rótula. Si hay chasquido, avisá.',
+const C2_M1_D2 = {
+  dayLabel:'Día 2', dayType:'circuito', dayFocus:'Core + acondicionamiento metabólico',
+  blockB:[
+    ex('Plancha con arrastre de mancuerna',3,'8 c/lado','RIR 1','45 seg'),
+    ex('Dead bug c/peso',3,'10 c/lado','RIR 2','45 seg'),
+  ],
+  blockC:[
+    ex('Circuito A — For Time (4 rondas)',1,'Cronometrar','RPE 8','3 min pausa',{notes:'Por ronda: KB swing ×15 + Box step-over ×10 + Push-up ×10 + Remo 250m. Anotá el tiempo total — referencia del C2.'}),
+    ex('Circuito B — EMOM 10 min',1,'10 min','—','—',{notes:'Min 1: 12 KB swing · Min 2: 10 mountain climbers · Min 3: 8 burpees · Min 4: 40 seg remo · Min 5: descanso. Repetís 2 veces.'}),
+  ],
 };
 
-const KNEE_SCALE = [
-  {val:0,label:'Sin molestia',color:'#4ade80'},
-  {val:1,label:'Leve / rozando',color:'#a3e635'},
-  {val:2,label:'Moderada tolerable',color:'#facc15'},
-  {val:3,label:'Moderada con limitación',color:'#fb923c'},
-  {val:4,label:'Fuerte — reducir carga',color:'#f87171'},
-  {val:5,label:'No continuar',color:'#dc2626'},
-];
+const C2_M1_D3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción (consolidación)',
+  blockB:[
+    ex('Peso muerto convencional c/barra',4,'6-8','RIR 2','2 min'),
+    ex('Jalón al pecho agarre cerrado',4,'8-10','RIR 2','90 seg'),
+  ],
+  blockC:[
+    ex('Hip thrust c/barra',3,'10-12','RIR 2','75 seg'),
+    ex('Push press c/mancuernas',3,'8-10','RIR 2','60 seg'),
+    ex('Face pull en polea',3,'15','RIR 1','45 seg'),
+    ex('Curl femoral en máquina',3,'12-15','RIR 1','45 seg'),
+  ],
+  blockD:{ type:'liss', label:'Cardio opcional', detail:'10 min caminadora inclinada nivel 7' },
+};
 
-function getKneeNote(name) {
-  const n = name.toLowerCase();
-  if (n.includes('step')) return KNEE_NOTES.step;
-  if (n.includes('zancada')) return KNEE_NOTES.zancada;
-  if (n.includes('b\u00falgara')) return KNEE_NOTES.bulg;
-  if (n.includes('prensa')) return KNEE_NOTES.prensa;
-  return KNEE_NOTES.default;
-}
+const C2_M1_D4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio LISS + movilidad activa',
+  blockB:[
+    ex('Caminadora inclinada (LISS)',1,'35-40 min','RPE 5-6','—'),
+  ],
+  blockC:[
+    ex('Movilidad torácica + cadera (circuito libre)',1,'15 min','—','—',{notes:'Movilidad 90/90 · Gato-camello · Rotación torácica · Estiramiento de psoas · Foam roller cadena posterior.'}),
+  ],
+};
 
+// ── BLOQUE 2 (Sem 5-8) ───────────────────────────────────────────────────────
+const C2_M2_D1 = {
+  dayLabel:'Día 1', dayFocus:'Fuerza inferior + empuje (técnicas avanzadas)',
+  blockB:[
+    ex('Sentadilla trasera c/barra',4,'5-6','RIR 1','2 min'),
+    ex('Press banca c/barra',4,'5-6','RIR 1','2 min'),
+  ],
+  blockC:[
+    ex('SS A1: Sentadilla búlgara c/mancuernas',3,'8-10 c/lado','RIR 1','15 seg → enlazar'),
+    ex('SS A2: Remo en máquina T-bar',3,'8-10','RIR 1','75 seg'),
+    ex('Elevación lateral myo-reps',3,'12+4+4+4','RIR 1','30 seg'),
+    ex('Abducción de cadera en máquina (drop set)',3,'15 + reducir 30% × fallo','RIR 0','45 seg'),
+  ],
+  blockD:{ type:'liss', label:'Cardio opcional', detail:'10 min caminadora inclinada nivel 8' },
+};
 
-function getWeekMeso(week){
-  if(week<=4) return MESOCYCLES[0];
-  if(week<=8) return MESOCYCLES[1];
-  return MESOCYCLES[2];
-}
+const C2_M2_D2 = {
+  dayLabel:'Día 2', dayType:'circuito', dayFocus:'Core + acondicionamiento metabólico (pico)',
+  blockB:[
+    ex('Plancha con arrastre de mancuerna',3,'10 c/lado','RIR 1','45 seg'),
+    ex('Rueda abdominal',3,'8-10','RIR 1','45 seg'),
+  ],
+  blockC:[
+    ex('Circuito A — For Time AMRAP (referencia)',1,'Max rondas 16 min','RPE 8-9','3 min pausa',{notes:'Ronda = KB swing ×15 + Box step-over ×10 + Push-up ×10 + Remo 250m. Comparás con el For Time del Bloque 1 — ¿cuántas rondas más?'}),
+    ex('Circuito B — EMOM 12 min intensivo',1,'12 min','—','—',{notes:'Min 1: 12 KB swing pesado · Min 2: 10 burpees · Min 3: 40 seg remo · Min 4: 10 mountain climbers · Min 5: 8 box jump · Min 6: descanso. Repetís 2 veces.'}),
+  ],
+};
+
+const C2_M2_D3 = {
+  dayLabel:'Día 3', dayFocus:'Cadena posterior + tracción (técnicas avanzadas)',
+  blockB:[
+    ex('Peso muerto convencional c/barra',4,'5-6','RIR 1','2 min'),
+    ex('Dominadas o jalón supino',4,'6-8','RIR 1','90 seg'),
+  ],
+  blockC:[
+    ex('Hip thrust c/barra (myo-reps)',3,'10+4+4+4','RIR 1','30 seg'),
+    ex('SS A1: Push press c/mancuernas',3,'6-8','RIR 1','15 seg → enlazar'),
+    ex('SS A2: Face pull en polea',3,'15','RIR 1','60 seg'),
+    ex('Curl femoral en máquina (drop set)',3,'12 + reducir 30% × fallo','RIR 0','45 seg'),
+  ],
+  blockD:{ type:'liss', label:'Cardio opcional', detail:'10 min caminadora inclinada nivel 8' },
+};
+
+const C2_M2_D4 = {
+  dayLabel:'Día 4', dayFocus:'Cardio LISS pico + movilidad integral',
+  blockB:[
+    ex('Caminadora inclinada (LISS pico)',1,'40-45 min','RPE 5-6','—'),
+  ],
+  blockC:[
+    ex('HIIT corto opcional (si energía lo permite)',6,'30 seg fuerte / 30 seg suave','RPE 7','—',{notes:'Solo si la semana tuvo buena recuperación. 6 intervalos máximo. Escuchá el cuerpo.'}),
+  ],
+};
+
+const m1 = [C2_M1_D1, C2_M1_D2, C2_M1_D3, C2_M1_D4];
+const m2 = [C2_M2_D1, C2_M2_D2, C2_M2_D3, C2_M2_D4];
+const TEMPLATES = { m1, m2 };
+
 
 function getMeso(week) {
   if (week <= 4) return MESOCYCLES[0];
@@ -634,143 +501,10 @@ function getMeso(week) {
 
 function getWeekSessions(week){
   var meso = getMeso(week);
-  var days = TEMPLATES[meso.id];
-  return days;
+  return TEMPLATES[meso.id];
 }
 
-function renderHeader() {
-  const nameEl = document.getElementById('student-name-display');
-  const nameInput = document.getElementById('student-name-input');
-  nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
-
-  const drEl = document.getElementById('date-range'); if(drEl) drEl.textContent = dateRange();
-  document.getElementById('completed-count').textContent = completedWeeks();
-
-  const cw = completedWeeks();
-  const segs = document.getElementById('progress-segs');
-  segs.innerHTML = '';
-  for (let i = 1; i <= 12; i++) {
-    const seg = h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')});
-    segs.appendChild(seg);
-  }
-
-  const roBtn = document.getElementById('readonly-toggle-btn');
-  const roBanner = document.getElementById('readonly-banner');
-  if (roBtn) {
-    const ro = isReadOnlyMode();
-    roBtn.textContent = ro ? '👁 MODO LECTURA: ON' : '👁 MODO LECTURA: OFF';
-    roBtn.style.borderColor = ro ? 'var(--accent)' : '';
-    roBtn.style.color = ro ? 'var(--accent)' : '';
-    if (roBanner) roBanner.style.display = ro ? 'block' : 'none';
-  }
-}
-
-/* ============================================================
-   RENDER: PLAN TAB
-   ============================================================ */
-function renderPlan() {
-  const c = document.getElementById('content');
-  c.innerHTML = '';
-
-  // Week selector
-  const label = h('div', {className:'phase-label', style:'margin-bottom:8px'}, 'Bloques del plan');
-  const weekRow = h('div', {className:'scroll', id:'week-selector'});
-  for (let w = 1; w <= 12; w++) {
-    const btn = h('button', {className:'week-btn mono' + (w === state.week ? ' active' : ''), onclick:() => { state.week = w; state.day = 0; renderPlan(); renderHeader(); }}, 'S' + w);
-    weekRow.appendChild(btn);
-  }
-
-  const meso = getWeekMeso(state.week);
-  const sessions = getWeekSessions(state.week);
-
-  // Block card
-  const blockCard = h('div', {id:'block-card'},
-    h('div', {id:'block-label'}, meso.name.toUpperCase() + ': ' + meso.subtitle.toUpperCase()),
-    h('div', {id:'block-focus'}, meso.focus)
-  );
-
-  // Day tabs
-  const dayRow = h('div', {className:'scroll', id:'day-tabs'});
-  sessions.forEach((s, i) => {
-    const dot = h('span', {className:'day-dot'});
-    const btn = h('button', {
-      className:'day-btn' + (i === state.day ? ' active' : ''),
-      onclick:() => { state.day = i; renderPlan(); }
-    }, dot, s.dayLabel);
-    dayRow.appendChild(btn);
-  });
-
-  c.appendChild(label);
-  c.appendChild(weekRow);
-  c.appendChild(blockCard);
-  c.appendChild(dayRow);
-  const sessionArea = h('div', {id:'session-area'});
-  sessionArea.appendChild(renderSession(state.week, state.day, sessions[state.day]));
-  c.appendChild(sessionArea);
-}
-
-/* ============================================================
-   RENDER: SESSION
-   ============================================================ */
-
-
-
-
-
-
-function renderExerciseList(frag, exercises, week, dayIdx, phase) {
-  let i = 0;
-  while (i < exercises.length) {
-    const ex = exercises[i];
-    const ssGroup = getSupersetGroup(ex.name); // null si no es SS, "A1"/"A2" etc si lo es
-
-    if (ssGroup) {
-      // Recopilar todos los ejercicios de esta superserie
-      const groupExs = [];
-      while (i < exercises.length && getSupersetGroup(exercises[i].name) === ssGroup) {
-        groupExs.push({ ex: exercises[i], idx: i });
-        i++;
-      }
-
-      // Contenedor visual de superserie
-      const groupEl = document.createElement('div');
-      groupEl.className = 'supersetie-group';
-
-      // Label
-      const labelEl = document.createElement('div');
-      labelEl.className = 'superserie-label';
-      labelEl.innerHTML = '⚡ SUPERSERIE ' + ssGroup + ' — ' + groupExs.length + ' ejercicios seguidos';
-      groupEl.appendChild(labelEl);
-
-      // Instrucciones
-      const instrEl = document.createElement('div');
-      instrEl.className = 'superserie-instructions';
-      const restText = groupExs[groupExs.length-1].ex.rest || '60 seg';
-      instrEl.innerHTML = '<strong>¿Cómo ejecutar la superserie?</strong><br>' +
-        '1. Hacé todas las reps del Ejercicio 1 → sin descanso pasás inmediatamente al Ejercicio 2 (y siguientes si hay más).<br>' +
-        '2. Eso completa <strong>1 ronda</strong> de la superserie.<br>' +
-        '3. Descansás <strong>' + restText + '</strong> — este es el único descanso entre rondas.<br>' +
-        '4. Volvés al Ejercicio 1 y repetís hasta completar todas las series indicadas.<br>' +
-        '<em>⚠️ No hay descanso entre los ejercicios dentro de cada ronda.</em>';
-      groupEl.appendChild(instrEl);
-
-      // Tarjetas de ejercicios
-      groupExs.forEach(({ ex: e, idx }) => {
-        const exName = getSSBaseName(e.name);
-        const modEx = Object.assign({}, e, { name: exName });
-        groupEl.appendChild(renderExCard(week, dayIdx, phase, idx, modEx));
-      });
-
-      frag.appendChild(groupEl);
-    } else {
-      frag.appendChild(renderExCard(week, dayIdx, phase, i, ex));
-      i++;
-    }
-  }
-}
-
-
-
+/* ============================================================ CEO SYSTEM */
 // ════════════════════════════════════════════════════════════════
 // VARIANTES DE CIRCUITO POR NIVEL DE ENERGÍA
 // alta → AMRAP/For time | media → EMOM | baja → Pausa fija
@@ -889,327 +623,56 @@ function getCircuitVariant(week, dayIdx, circuitIdx, energyMode) {
   return null;
 }
 
-// ════════════════════════════════ MÉTODO CEO ════════════════════════════════
-
-
-// ════════════════════════════════════════════════════════════════
-// VARIANTES DE CIRCUITO POR NIVEL DE ENERGÍA
-// alta → AMRAP/For time | media → EMOM | baja → Pausa fija
-// ════════════════════════════════════════════════════════════════
-
-
-function renderCicloHormonal() {
-  const wrap = document.createElement('div');
-  wrap.className = 'ciclo-wrap';
-
-  const header = document.createElement('div');
-  header.className = 'ciclo-header';
-  header.innerHTML = '<span class="ciclo-title">💜 Tu ciclo también entrena con vos</span><span class="ciclo-toggle" id="ciclo-toggle">▼ ver</span>';
-  
-  const body = document.createElement('div');
-  body.className = 'ciclo-body';
-  body.innerHTML = `
-    <p class="ciclo-intro">Cada semana del mes tu cuerpo es diferente. Acá va una guía rápida para que sepas cómo ajustar el entrenamiento según cómo te sentís:</p>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en tus primeros días del mes</div>
-      <div class="ciclo-item-text">Si hay molestias o simplemente te sentís pesada: bajá el peso con el que normalmente entrenás, hacé las series que puedas sin culpa y priorizá moverte sobre rendirte. Si solo completás 2 series en vez de 4, está perfecto. No es retroceso, es escucharte.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si ya pasaron los primeros días y empezás a sentirte mejor</div>
-      <div class="ciclo-item-text">Tu energía vuelve naturalmente. Es un buen momento para retomar el ritmo normal, intentar subir un poco el peso que venías usando y ver cómo responde el cuerpo. No tenés que forzar, pero si te sentís bien, aprovechalo.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en la mitad del mes y te sentís con mucha energía</div>
-      <div class="ciclo-item-text">Suele ser el momento del mes donde más fuerza tenés. Si elegiste "mucha energía" hoy, es una buena semana para intentar superar una marca personal o hacer las series más completas. Solo tené cuidado con los saltos o movimientos muy bruscos si tocan en tu plani — tu cuerpo en esta etapa es más propenso a pequeños tirones.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en la semana previa a tus primeros días</div>
-      <div class="ciclo-item-text">Es muy común sentirse más cansada, irritable o inflamada. Si elegiste "baja energía" o "energía media" hoy, tu cuerpo te está hablando y está bien hacerle caso. Hacé lo que puedas, sin compararte con cómo estabas la semana pasada. Completar la sesión así como te sentís ya es un logro enorme.</div>
-    </div>
-  `;
-
-  let open = false;
-  header.onclick = function() {
-    open = !open;
-    body.style.display = open ? 'block' : 'none';
-    document.getElementById('ciclo-toggle').textContent = open ? '▲ ocultar' : '▼ ver';
-  };
-
-  wrap.appendChild(header);
-  wrap.appendChild(body);
-  return wrap;
-}
-
-function renderCEOSelector(week,dayIdx,session,onSelect){
-  const c=document.createElement('div');c.className='ceo-selector';
-  c.innerHTML='<div class="ceo-selector-title">⚡ Método CEO — Adaptá tu sesión de hoy</div>';
-  let selT=null,selE=null;
-  const tLabel=document.createElement('div');tLabel.className='ceo-label';tLabel.textContent='⏱ Tiempo disponible';c.appendChild(tLabel);
-  const tRow=document.createElement('div');tRow.className='ceo-row';
-  [{v:'normal',l:'60 min',s:'Sesión completa'},{v:'reduced',l:'30-40 min',s:'Reducida'},{v:'minimal',l:'20-30 min',s:'Mínima efectiva'}].forEach(o=>{
-    const b=document.createElement('button');b.className='ceo-btn';
-    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
-    b.onclick=()=>{tRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-time'));b.classList.add('active-time');selT=o.v;check();};
-    tRow.appendChild(b);
-  });c.appendChild(tRow);
-  const eLabel=document.createElement('div');eLabel.className='ceo-label';eLabel.style.marginTop='8px';eLabel.textContent='🔋 Nivel de energía';c.appendChild(eLabel);
-  const eRow=document.createElement('div');eRow.className='ceo-row';
-  [{v:'high',l:'💪 Mucha energía',s:'Al 100%'},{v:'medium',l:'😐 Algo baja',s:'Puedo entrenar'},{v:'low',l:'😴 Baja energía',s:'Día difícil'}].forEach(o=>{
-    const b=document.createElement('button');b.className='ceo-btn';
-    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
-    b.onclick=()=>{eRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-energy'));b.classList.add('active-energy');selE=o.v;check();};
-    eRow.appendChild(b);
-  });c.appendChild(eRow);
-  const btn=document.createElement('button');
-  btn.style.cssText='width:100%;margin-top:14px;padding:12px;background:#82b7d9;color:#0a0a0a;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;opacity:.4;transition:opacity .2s;font-family:inherit;';
-  btn.textContent='→ Ver mi sesión';btn.disabled=true;c.appendChild(btn);
-  function check(){const ok=selT&&selE;btn.disabled=!ok;btn.style.opacity=ok?'1':'.4';}
-  btn.onclick=()=>{if(selT&&selE)onSelect(selT,selE);};
-  return c;
-}
-
-function adaptSession(session,timeMode,energyMode,_week,_dayIdx){
-  const s=JSON.parse(JSON.stringify(session));
-  const orig=JSON.parse(JSON.stringify(session));
-  const isCircuito=session.dayType==='circuito';
-  if(timeMode==='normal'&&energyMode==='high')return{...s,ceoMod:null,ceoBadge:'normal',ceoNote:null};
-  let badge='normal',note='';
-  function adjRIR(rir,d){if(!rir)return rir;return rir.replace(/RIR (\d+)/,(_,n)=>'RIR '+(parseInt(n)+d));}
-  if(isCircuito){
-    // Aplicar variante de formato según energía
-    const applyVariants = (blockC, energy) => {
-      return blockC.map((circ, i) => {
-        const variant = getCircuitVariant(_week||1, _dayIdx||2, i, energy);
-        if (variant) return { ...circ, name: variant.name, reps: variant.reps, rest: variant.rest, notes: variant.notes };
-        return circ;
-      });
-    };
-
-    if(timeMode==='minimal'){
-      // Solo Circuito A, formato según energía, versión corta
-      const minimalVariants = {
-        high:   (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].high,   name: CIRCUIT_VARIANTS[key].high.name.replace(/\d+ min/, '8 min').replace(/AMRAP \d+/, 'AMRAP 8').replace(/\d+ rondas/, '2 rondas') } : null,
-        medium: (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].medium, name: CIRCUIT_VARIANTS[key].medium.name.replace(/\d+ min/, '8 min').replace(/EMOM \d+/, 'EMOM 8') } : null,
-        low:    (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].low,    name: CIRCUIT_VARIANTS[key].low.name.replace(/\d+ rondas/, '2 rondas') } : null,
-      };
-      s.blockC = orig.blockC.slice(0,1).map((circ, i) => {
-        const circKey = 's' + (_week||1) + '_c' + (i+1);
-        const v = minimalVariants[energyMode] ? minimalVariants[energyMode](circKey) : null;
-        return v ? { ...circ, name: v.name, reps: v.reps || circ.reps, rest: v.rest || circ.rest, notes: v.notes || circ.notes } : circ;
-      });
-      badge='minimal';
-    } else if(timeMode==='reduced'){
-      // Solo Circuito A, formato completo según energía
-      s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
-      badge='reduced';
-    } else {
-      // Tiempo completo: ambos circuitos con variante de energía
-      s.blockC = applyVariants(orig.blockC, energyMode);
-    }
-
-    if(!s.blockC||!s.blockC.length) s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
-
-    const formatLabel = {high:'AMRAP / For time', medium:'EMOM', low:'Circuito con pausa fija'};
-    const tNotes={reduced:'Con el tiempo disponible, el Circuito A es la prioridad.',minimal:'Con poco tiempo, el Circuito A es suficiente para mantener el estímulo metabólico.'};
-    const eNotes={
-      high:'',
-      medium:'Energía algo baja: formato EMOM — el minuto estructura tu esfuerzo automáticamente, sin necesidad de ir al límite.',
-      low:'Baja energía: formato con pausa fija — trabajás a ritmo controlado con descanso garantizado entre rondas. El objetivo es completarlo.'
-    };
-    note=[tNotes[timeMode]||'',eNotes[energyMode]||''].filter(Boolean).join(' ');
-    if(energyMode!=='high') badge = badge==='normal' ? 'reduced' : badge;
-    return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
-  }
-  if(timeMode==='reduced'){s.blockB=orig.blockB.map(e=>({...e,sets:Math.min(e.sets,3)}));s.blockC=[];s.blockD=null;badge='reduced';}
-  else if(timeMode==='minimal'){s.blockB=orig.blockB.slice(0,2).map(e=>({...e,sets:Math.min(e.sets,2)}));s.blockC=[];s.blockD=null;badge='minimal';}
-  if(energyMode==='medium'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,1)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,1)}));if(badge==='normal')badge='reduced';}
-  else if(energyMode==='low'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,2)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,2)}));if(badge==='normal')badge='reduced';}
-  const tNotes={normal:'',reduced:'Con el tiempo disponible, priorizamos los ejercicios principales — son los que más impacto tienen en tu objetivo.',minimal:'Con poco tiempo, los 2 ejercicios base son suficientes para mantener el estímulo muscular y seguir avanzando.'};
-  const eNotes={high:'',medium:'Energía algo baja: RIR +1 en todos los ejercicios. Misma sesión, un peldaño menos de intensidad.',low:'Baja energía: RIR +2, sin llegar al fallo. Sigue siendo un estímulo válido — completar la sesión hoy ya es una ganancia.'};
-  note=[tNotes[timeMode],eNotes[energyMode]].filter(Boolean).join(' ');
-  return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
-}
-function renderCicloHormonal() {
-  const wrap = document.createElement('div');
-  wrap.className = 'ciclo-wrap';
-
-  const header = document.createElement('div');
-  header.className = 'ciclo-header';
-  header.innerHTML = '<span class="ciclo-title">💜 Tu ciclo también entrena con vos</span><span class="ciclo-toggle" id="ciclo-toggle">▼ ver</span>';
-  
-  const body = document.createElement('div');
-  body.className = 'ciclo-body';
-  body.innerHTML = `
-    <p class="ciclo-intro">Cada semana del mes tu cuerpo es diferente. Acá va una guía rápida para que sepas cómo ajustar el entrenamiento según cómo te sentís:</p>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en tus primeros días del mes</div>
-      <div class="ciclo-item-text">Si hay molestias o simplemente te sentís pesada: bajá el peso con el que normalmente entrenás, hacé las series que puedas sin culpa y priorizá moverte sobre rendirte. Si solo completás 2 series en vez de 4, está perfecto. No es retroceso, es escucharte.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si ya pasaron los primeros días y empezás a sentirte mejor</div>
-      <div class="ciclo-item-text">Tu energía vuelve naturalmente. Es un buen momento para retomar el ritmo normal, intentar subir un poco el peso que venías usando y ver cómo responde el cuerpo. No tenés que forzar, pero si te sentís bien, aprovechalo.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en la mitad del mes y te sentís con mucha energía</div>
-      <div class="ciclo-item-text">Suele ser el momento del mes donde más fuerza tenés. Si elegiste "mucha energía" hoy, es una buena semana para intentar superar una marca personal o hacer las series más completas. Solo tené cuidado con los saltos o movimientos muy bruscos si tocan en tu plani — tu cuerpo en esta etapa es más propenso a pequeños tirones.</div>
-    </div>
-    <div class="ciclo-item">
-      <div class="ciclo-item-title">Si estás en la semana previa a tus primeros días</div>
-      <div class="ciclo-item-text">Es muy común sentirse más cansada, irritable o inflamada. Si elegiste "baja energía" o "energía media" hoy, tu cuerpo te está hablando y está bien hacerle caso. Hacé lo que puedas, sin compararte con cómo estabas la semana pasada. Completar la sesión así como te sentís ya es un logro enorme.</div>
-    </div>
-  `;
-
-  let open = false;
-  header.onclick = function() {
-    open = !open;
-    body.style.display = open ? 'block' : 'none';
-    document.getElementById('ciclo-toggle').textContent = open ? '▲ ocultar' : '▼ ver';
-  };
-
-  wrap.appendChild(header);
-  wrap.appendChild(body);
-  return wrap;
-}
-
-function renderCEOSelector(week,dayIdx,session,onSelect){
-  const c=document.createElement('div');c.className='ceo-selector';
-  c.innerHTML='<div class="ceo-selector-title">⚡ Método CEO — Adaptá tu sesión de hoy</div>';
-  let selT=null,selE=null;
-  const tLabel=document.createElement('div');tLabel.className='ceo-label';tLabel.textContent='⏱ Tiempo disponible';c.appendChild(tLabel);
-  const tRow=document.createElement('div');tRow.className='ceo-row';
-  [{v:'normal',l:'60 min',s:'Sesión completa'},{v:'reduced',l:'30-40 min',s:'Reducida'},{v:'minimal',l:'20-30 min',s:'Mínima efectiva'}].forEach(o=>{
-    const b=document.createElement('button');b.className='ceo-btn';
-    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
-    b.onclick=()=>{tRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-time'));b.classList.add('active-time');selT=o.v;check();};
-    tRow.appendChild(b);
-  });c.appendChild(tRow);
-  const eLabel=document.createElement('div');eLabel.className='ceo-label';eLabel.style.marginTop='8px';eLabel.textContent='🔋 Nivel de energía';c.appendChild(eLabel);
-  const eRow=document.createElement('div');eRow.className='ceo-row';
-  [{v:'high',l:'💪 Mucha energía',s:'Al 100%'},{v:'medium',l:'😐 Algo baja',s:'Puedo entrenar'},{v:'low',l:'😴 Baja energía',s:'Día difícil'}].forEach(o=>{
-    const b=document.createElement('button');b.className='ceo-btn';
-    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
-    b.onclick=()=>{eRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-energy'));b.classList.add('active-energy');selE=o.v;check();};
-    eRow.appendChild(b);
-  });c.appendChild(eRow);
-  const btn=document.createElement('button');
-  btn.style.cssText='width:100%;margin-top:14px;padding:12px;background:#82b7d9;color:#0a0a0a;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;opacity:.4;transition:opacity .2s;font-family:inherit;';
-  btn.textContent='→ Ver mi sesión';btn.disabled=true;c.appendChild(btn);
-  function check(){const ok=selT&&selE;btn.disabled=!ok;btn.style.opacity=ok?'1':'.4';}
-  btn.onclick=()=>{if(selT&&selE)onSelect(selT,selE);};
-  return c;
-}
-
-function adaptSession(session,timeMode,energyMode,_week,_dayIdx){
-  const s=JSON.parse(JSON.stringify(session));
-  const orig=JSON.parse(JSON.stringify(session));
-  const isCircuito=session.dayType==='circuito';
-  if(timeMode==='normal'&&energyMode==='high')return{...s,ceoMod:null,ceoBadge:'normal',ceoNote:null};
-  let badge='normal',note='';
-  function adjRIR(rir,d){if(!rir)return rir;return rir.replace(/RIR (\d+)/,(_,n)=>'RIR '+(parseInt(n)+d));}
-  if(isCircuito){
-    // Aplicar variante de formato según energía
-    const applyVariants = (blockC, energy) => {
-      return blockC.map((circ, i) => {
-        const variant = getCircuitVariant(_week||1, _dayIdx||2, i, energy);
-        if (variant) return { ...circ, name: variant.name, reps: variant.reps, rest: variant.rest, notes: variant.notes };
-        return circ;
-      });
-    };
-
-    if(timeMode==='minimal'){
-      // Solo Circuito A, formato según energía, versión corta
-      const minimalVariants = {
-        high:   (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].high,   name: CIRCUIT_VARIANTS[key].high.name.replace(/\d+ min/, '8 min').replace(/AMRAP \d+/, 'AMRAP 8').replace(/\d+ rondas/, '2 rondas') } : null,
-        medium: (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].medium, name: CIRCUIT_VARIANTS[key].medium.name.replace(/\d+ min/, '8 min').replace(/EMOM \d+/, 'EMOM 8') } : null,
-        low:    (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].low,    name: CIRCUIT_VARIANTS[key].low.name.replace(/\d+ rondas/, '2 rondas') } : null,
-      };
-      s.blockC = orig.blockC.slice(0,1).map((circ, i) => {
-        const circKey = 's' + (_week||1) + '_c' + (i+1);
-        const v = minimalVariants[energyMode] ? minimalVariants[energyMode](circKey) : null;
-        return v ? { ...circ, name: v.name, reps: v.reps || circ.reps, rest: v.rest || circ.rest, notes: v.notes || circ.notes } : circ;
-      });
-      badge='minimal';
-    } else if(timeMode==='reduced'){
-      // Solo Circuito A, formato completo según energía
-      s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
-      badge='reduced';
-    } else {
-      // Tiempo completo: ambos circuitos con variante de energía
-      s.blockC = applyVariants(orig.blockC, energyMode);
-    }
-
-    if(!s.blockC||!s.blockC.length) s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
-
-    const formatLabel = {high:'AMRAP / For time', medium:'EMOM', low:'Circuito con pausa fija'};
-    const tNotes={reduced:'Con el tiempo disponible, el Circuito A es la prioridad.',minimal:'Con poco tiempo, el Circuito A es suficiente para mantener el estímulo metabólico.'};
-    const eNotes={
-      high:'',
-      medium:'Energía algo baja: formato EMOM — el minuto estructura tu esfuerzo automáticamente, sin necesidad de ir al límite.',
-      low:'Baja energía: formato con pausa fija — trabajás a ritmo controlado con descanso garantizado entre rondas. El objetivo es completarlo.'
-    };
-    note=[tNotes[timeMode]||'',eNotes[energyMode]||''].filter(Boolean).join(' ');
-    if(energyMode!=='high') badge = badge==='normal' ? 'reduced' : badge;
-    return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
-  }
-  if(timeMode==='reduced'){s.blockB=orig.blockB.map(e=>({...e,sets:Math.min(e.sets,3)}));s.blockC=[];s.blockD=null;badge='reduced';}
-  else if(timeMode==='minimal'){s.blockB=orig.blockB.slice(0,2).map(e=>({...e,sets:Math.min(e.sets,2)}));s.blockC=[];s.blockD=null;badge='minimal';}
-  if(energyMode==='medium'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,1)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,1)}));if(badge==='normal')badge='reduced';}
-  else if(energyMode==='low'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,2)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,2)}));if(badge==='normal')badge='reduced';}
-  const tNotes={normal:'',reduced:'Con el tiempo disponible, priorizamos los ejercicios principales — son los que más impacto tienen en tu objetivo.',minimal:'Con poco tiempo, los 2 ejercicios base son suficientes para mantener el estímulo muscular y seguir avanzando.'};
-  const eNotes={high:'',medium:'Energía algo baja: RIR +1 en todos los ejercicios. Misma sesión, un peldaño menos de intensidad.',low:'Baja energía: RIR +2, sin llegar al fallo. Sigue siendo un estímulo válido — completar la sesión hoy ya es una ganancia.'};
-  note=[tNotes[timeMode],eNotes[energyMode]].filter(Boolean).join(' ');
-  return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
-}
 
 const ENERGY_MESSAGES = {
-  // Bloque 1 — Consolidación
-  1: {
-    high:  'Primer semana del ciclo nuevo — este es tu punto de partida. Registrá todo lo que puedas: es la base sobre la que vas a medir tu progreso en las próximas 8 semanas. Arrancá con ganas.',
-    medium:'Empezar ya es un montón. No importa cómo te sentís hoy — lo que cuenta es que estás acá. Hacé lo que puedas y anotá los pesos, aunque sean conservadores.',
-    low:   'Días así también forman parte del proceso. Apareciste y eso ya es una victoria. Hacé la sesión adaptada a tu ritmo, sin culpa. Tu cuerpo lo va a agradecer.'
-  },
-  2: {
-    high:  'Ya tenés una semana de referencia. Si la semana pasada fue sólida, esta es tu momento de subir un poco la carga en los básicos. Confiá en lo que registraste.',
-    medium:'La constancia vale más que la intensidad. Hacer esta semana, aunque sea al 80%, te pone por delante de no hacerla. Seguí.',
-    low:   'A veces el cuerpo necesita más tiempo para adaptarse. Está bien. Mantené el movimiento y no te compares con la semana pasada — cada día es diferente.'
-  },
-  3: {
-    high:  'Mitad del primer bloque — si llegaste al techo del rango de reps en algún ejercicio, esta semana podés intentar subir el peso. Eso es la doble progresión en acción.',
-    medium:'Semana 3 es donde muchas empiezan a notar pequeños cambios. Seguí registrando — los números no mienten, aunque las sensaciones a veces engañen.',
-    low:   'El cuerpo acumula trabajo aunque no lo notes. Tres semanas de movimiento consistente son tres semanas de adaptación real. Hoy seguís sumando.'
-  },
-  4: {
-    high:  'Última semana del Bloque 1. Cerrala fuerte — mismo peso que la semana pasada pero con un poco más de intensidad. Preparate para el Bloque 2 que viene con herramientas nuevas.',
-    medium:'Llegaste a la semana de consolidación. El objetivo no es romper marcas sino cerrar el bloque con solidez. Técnica limpia y series completas.',
-    low:   'Cerrar el bloque, aunque sea a media máquina, ya es un logro. La semana que viene arranca algo nuevo y vas a tener energía renovada.'
-  },
-  // Bloque 2 — Técnicas avanzadas
-  5: {
-    high:  'Bloque 2 — empiezan las superseries y myo-reps. Va a sentirse diferente al principio, es normal. Bajá un poco la carga respecto a la semana 4 y enfocate en aprender la técnica nueva.',
-    medium:'Semana nueva, herramientas nuevas. Las superseries son intensas — si la energía está media, mejor hacerlas con carga conservadora y buen descanso entre pares.',
-    low:   'Con baja energía y técnicas nuevas, menos es más. Hacé los ejercicios principales y saltea los accesorios si hace falta. Conocer el movimiento ya es suficiente para hoy.'
-  },
-  6: {
-    high:  'Ya le agarraste la mano a las superseries. Esta semana intentá progresar en la carga o en las mini-series de los myo-reps. Anotá cuántas extra podés hacer.',
-    medium:'Semana 6 — el volumen empieza a acumularse. Si la energía está media, priorizá los ejercicios de bloque B y dejá los accesorios para cuando te sobre tiempo.',
-    low:   'La fatiga acumulada es real en esta etapa. No es falta de ganas — es el cuerpo procesando semanas de trabajo. Una sesión suave hoy protege las próximas.'
-  },
-  7: {
-    high:  'Pico de volumen del ciclo. Si te sentís bien, esta es la semana para ir al límite técnico — última serie cerca del fallo. Anotá todo, vas a querer estos números como referencia.',
-    medium:'Semana 7 con energía media — aún así podés hacer una sesión de calidad. Enfocate en la sensación muscular más que en los kilos. El estímulo está igual.',
-    low:   'Semana de pico con baja energía — escuchate. Una sesión reducida bien hecha vale más que una completa a medias. Tu cuerpo ya hizo mucho trabajo este ciclo.'
-  },
-  8: {
-    high:  'Última semana del Ciclo 2. Cerrala con todo — en los circuitos, intentá mejorar tu marca del Bloque 1. En los básicos, apuntá a un PR técnico. Esto es lo que entrenaste.',
-    medium:'Semana de cierre. Aunque la energía no esté al 100%, completar esta semana es terminar un ciclo entero. Eso tiene un valor enorme — no lo subestimes.',
-    low:   'Llegaste a la última semana. Independientemente de cómo te sentís hoy, completar este ciclo — con sus altas y bajas — ya es un resultado concreto. Orgullosa de vos.'
-  }
+  1:{high:'Primer semana del ciclo nuevo — este es tu punto de partida. Registrá todo lo que puedas: es la base sobre la que vas a medir tu progreso en las próximas 8 semanas. Arrancá con ganas.',medium:'Empezar ya es un montón. No importa cómo te sentís hoy — lo que cuenta es que estás acá. Hacé lo que puedas y anotá los pesos, aunque sean conservadores.',low:'Días así también forman parte del proceso. Apareciste y eso ya es una victoria. Hacé la sesión adaptada a tu ritmo, sin culpa. Tu cuerpo lo va a agradecer.'},
+  2:{high:'Ya tenés una semana de referencia. Si la semana pasada fue sólida, esta es tu momento de subir un poco la carga en los básicos. Confiá en lo que registraste.',medium:'La constancia vale más que la intensidad. Hacer esta semana, aunque sea al 80%, te pone por delante de no hacerla. Seguí.',low:'A veces el cuerpo necesita más tiempo para adaptarse. Está bien. Mantené el movimiento y no te compares con la semana pasada — cada día es diferente.'},
+  3:{high:'Mitad del primer bloque — si llegaste al techo del rango de reps en algún ejercicio, esta semana podés intentar subir el peso. Eso es la doble progresión en acción.',medium:'Semana 3 es donde muchas empiezan a notar pequeños cambios. Seguí registrando — los números no mienten, aunque las sensaciones a veces engañen.',low:'El cuerpo acumula trabajo aunque no lo notes. Tres semanas de movimiento consistente son tres semanas de adaptación real. Hoy seguís sumando.'},
+  4:{high:'Última semana del Bloque 1. Cerrala fuerte — mismo peso que la semana pasada pero con un poco más de intensidad. Preparate para el Bloque 2 que viene con herramientas nuevas.',medium:'Llegaste a la semana de consolidación. El objetivo no es romper marcas sino cerrar el bloque con solidez. Técnica limpia y series completas.',low:'Cerrar el bloque, aunque sea a media máquina, ya es un logro. La semana que viene arranca algo nuevo y vas a tener energía renovada.'},
+  5:{high:'Bloque 2 — empiezan las superseries y myo-reps. Va a sentirse diferente al principio, es normal. Bajá un poco la carga respecto a la semana 4 y enfocate en aprender la técnica nueva.',medium:'Semana nueva, herramientas nuevas. Las superseries son intensas — si la energía está media, mejor hacerlas con carga conservadora y buen descanso entre pares.',low:'Con baja energía y técnicas nuevas, menos es más. Hacé los ejercicios principales y saltea los accesorios si hace falta. Conocer el movimiento ya es suficiente para hoy.'},
+  6:{high:'Ya le agarraste la mano a las superseries. Esta semana intentá progresar en la carga o en las mini-series de los myo-reps. Anotá cuántas extra podés hacer.',medium:'Semana 6 — el volumen empieza a acumularse. Si la energía está media, priorizá los ejercicios de bloque B y dejá los accesorios para cuando te sobre tiempo.',low:'La fatiga acumulada es real en esta etapa. No es falta de ganas — es el cuerpo procesando semanas de trabajo. Una sesión suave hoy protege las próximas.'},
+  7:{high:'Pico de volumen del ciclo. Si te sentís bien, esta es la semana para ir al límite técnico — última serie cerca del fallo. Anotá todo, vas a querer estos números como referencia.',medium:'Semana 7 con energía media — aún así podés hacer una sesión de calidad. Enfocate en la sensación muscular más que en los kilos. El estímulo está igual.',low:'Semana de pico con baja energía — escuchate. Una sesión reducida bien hecha vale más que una completa a medias. Tu cuerpo ya hizo mucho trabajo este ciclo.'},
+  8:{high:'Última semana del Ciclo 2. Cerrala con todo — en los circuitos, intentá mejorar tu marca del Bloque 1. En los básicos, apuntá a un PR técnico. Esto es lo que entrenaste.',medium:'Semana de cierre. Aunque la energía no esté al 100%, completar esta semana es terminar un ciclo entero. Eso tiene un valor enorme — no lo subestimes.',low:'Llegaste a la última semana. Independientemente de cómo te sentís hoy, completar este ciclo — con sus altas y bajas — ya es un resultado concreto. Orgullosa de vos.'}
 };
+function getEnergyMessage(week,eMode){const m=ENERGY_MESSAGES[week];if(!m)return null;return m[eMode]||m.medium;}
 
-function getEnergyMessage(week, energyMode) {
-  const msgs = ENERGY_MESSAGES[week];
-  if (!msgs) return null;
-  return msgs[energyMode] || msgs.medium;
+
+function renderCicloHormonal() {
+  const wrap = document.createElement('div');
+  wrap.className = 'ciclo-wrap';
+  const header = document.createElement('div');
+  header.className = 'ciclo-header';
+  header.innerHTML = '<span class="ciclo-title">💜 Tu ciclo también entrena con vos</span><span class="ciclo-toggle" id="ciclo-toggle">▼ ver</span>';
+  const body = document.createElement('div');
+  body.className = 'ciclo-body';
+  body.innerHTML = `
+    <p class="ciclo-intro">Cada semana del mes tu cuerpo es diferente. Acá va una guía rápida para que sepas cómo ajustar el entrenamiento según cómo te sentís:</p>
+    <div class="ciclo-item">
+      <div class="ciclo-item-title">Si estás en tus primeros días del mes</div>
+      <div class="ciclo-item-text">Si hay molestias o simplemente te sentís pesada: bajá el peso con el que normalmente entrenás, hacé las series que puedas sin culpa y priorizá moverte sobre rendirte. Si solo completás 2 series en vez de 4, está perfecto. No es retroceso, es escucharte.</div>
+    </div>
+    <div class="ciclo-item">
+      <div class="ciclo-item-title">Si ya pasaron los primeros días y empezás a sentirte mejor</div>
+      <div class="ciclo-item-text">Tu energía vuelve naturalmente. Es un buen momento para retomar el ritmo normal, intentar subir un poco el peso que venías usando y ver cómo responde el cuerpo. No tenés que forzar, pero si te sentís bien, aprovechalo.</div>
+    </div>
+    <div class="ciclo-item">
+      <div class="ciclo-item-title">Si estás en la mitad del mes y te sentís con mucha energía</div>
+      <div class="ciclo-item-text">Suele ser el momento del mes donde más fuerza tenés. Si elegiste "mucha energía" hoy, es una buena semana para intentar superar una marca personal o hacer las series más completas. Solo tené cuidado con los saltos o movimientos muy bruscos si tocan en tu plani — tu cuerpo en esta etapa es más propenso a pequeños tirones.</div>
+    </div>
+    <div class="ciclo-item">
+      <div class="ciclo-item-title">Si estás en la semana previa a tus primeros días</div>
+      <div class="ciclo-item-text">Es muy común sentirse más cansada, irritable o inflamada. Si elegiste "baja energía" o "energía media" hoy, tu cuerpo te está hablando y está bien hacerle caso. Hacé lo que puedas, sin compararte con cómo estabas la semana pasada. Completar la sesión así como te sentís ya es un logro enorme.</div>
+    </div>
+  `;
+  let open = false;
+  header.onclick = function() {
+    open = !open;
+    body.style.display = open ? 'block' : 'none';
+    document.getElementById('ciclo-toggle').textContent = open ? '▲ ocultar' : '▼ ver';
+  };
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+  return wrap;
 }
 
 function renderCEOModNote(session){
@@ -1228,9 +691,228 @@ function renderCEOModNote(session){
   }
   return frag;
 }
+function renderCEOSelector(week,dayIdx,session,onSelect){
+  const c=document.createElement('div');c.className='ceo-selector';
+  c.innerHTML='<div class="ceo-selector-title">⚡ Método CEO — Adaptá tu sesión de hoy</div>';
+  let selT=null,selE=null;
+  const tLabel=document.createElement('div');tLabel.className='ceo-label';tLabel.textContent='⏱ Tiempo disponible';c.appendChild(tLabel);
+  const tRow=document.createElement('div');tRow.className='ceo-row';
+  [{v:'normal',l:'60 min',s:'Sesión completa'},{v:'reduced',l:'30-40 min',s:'Reducida'},{v:'minimal',l:'20-30 min',s:'Mínima efectiva'}].forEach(o=>{
+    const b=document.createElement('button');b.className='ceo-btn';
+    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
+    b.onclick=()=>{tRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-time'));b.classList.add('active-time');selT=o.v;check();};
+    tRow.appendChild(b);
+  });c.appendChild(tRow);
+  const eLabel=document.createElement('div');eLabel.className='ceo-label';eLabel.style.marginTop='8px';eLabel.textContent='🔋 Nivel de energía';c.appendChild(eLabel);
+  const eRow=document.createElement('div');eRow.className='ceo-row';
+  [{v:'high',l:'💪 Mucha energía',s:'Al 100%'},{v:'medium',l:'😐 Algo baja',s:'Puedo entrenar'},{v:'low',l:'😴 Baja energía',s:'Día difícil'}].forEach(o=>{
+    const b=document.createElement('button');b.className='ceo-btn';
+    b.innerHTML='<div>'+o.l+'</div><div style="font-size:10px;font-weight:400;opacity:.7;margin-top:2px;">'+o.s+'</div>';
+    b.onclick=()=>{eRow.querySelectorAll('.ceo-btn').forEach(x=>x.classList.remove('active-energy'));b.classList.add('active-energy');selE=o.v;check();};
+    eRow.appendChild(b);
+  });c.appendChild(eRow);
+  const btn=document.createElement('button');
+  btn.style.cssText='width:100%;margin-top:14px;padding:12px;background:#82b7d9;color:#0a0a0a;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;opacity:.4;transition:opacity .2s;font-family:inherit;';
+  btn.textContent='→ Ver mi sesión';btn.disabled=true;c.appendChild(btn);
+  function check(){const ok=selT&&selE;btn.disabled=!ok;btn.style.opacity=ok?'1':'.4';}
+  btn.onclick=()=>{if(selT&&selE)onSelect(selT,selE);};
+  return c;
+}
+function adaptSession(session,timeMode,energyMode,_week,_dayIdx){
+  const s=JSON.parse(JSON.stringify(session));
+  const orig=JSON.parse(JSON.stringify(session));
+  const isCircuito=session.dayType==='circuito';
+  if(timeMode==='normal'&&energyMode==='high')return{...s,ceoMod:null,ceoBadge:'normal',ceoNote:null};
+  let badge='normal',note='';
+  function adjRIR(rir,d){if(!rir)return rir;return rir.replace(/RIR (\d+)/,(_,n)=>'RIR '+(parseInt(n)+d));}
+  if(isCircuito){
+    // Aplicar variante de formato según energía
+    const applyVariants = (blockC, energy) => {
+      return blockC.map((circ, i) => {
+        const variant = getCircuitVariant(_week||1, _dayIdx||2, i, energy);
+        if (variant) return { ...circ, name: variant.name, reps: variant.reps, rest: variant.rest, notes: variant.notes };
+        return circ;
+      });
+    };
+
+    if(timeMode==='minimal'){
+      // Solo Circuito A, formato según energía, versión corta
+      const minimalVariants = {
+        high:   (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].high,   name: CIRCUIT_VARIANTS[key].high.name.replace(/\d+ min/, '8 min').replace(/AMRAP \d+/, 'AMRAP 8').replace(/\d+ rondas/, '2 rondas') } : null,
+        medium: (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].medium, name: CIRCUIT_VARIANTS[key].medium.name.replace(/\d+ min/, '8 min').replace(/EMOM \d+/, 'EMOM 8') } : null,
+        low:    (key) => CIRCUIT_VARIANTS[key] ? { ...CIRCUIT_VARIANTS[key].low,    name: CIRCUIT_VARIANTS[key].low.name.replace(/\d+ rondas/, '2 rondas') } : null,
+      };
+      s.blockC = orig.blockC.slice(0,1).map((circ, i) => {
+        const circKey = 's' + (_week||1) + '_c' + (i+1);
+        const v = minimalVariants[energyMode] ? minimalVariants[energyMode](circKey) : null;
+        return v ? { ...circ, name: v.name, reps: v.reps || circ.reps, rest: v.rest || circ.rest, notes: v.notes || circ.notes } : circ;
+      });
+      badge='minimal';
+    } else if(timeMode==='reduced'){
+      // Solo Circuito A, formato completo según energía
+      s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
+      badge='reduced';
+    } else {
+      // Tiempo completo: ambos circuitos con variante de energía
+      s.blockC = applyVariants(orig.blockC, energyMode);
+    }
+
+    if(!s.blockC||!s.blockC.length) s.blockC = applyVariants(orig.blockC.slice(0,1), energyMode);
+
+    const formatLabel = {high:'AMRAP / For time', medium:'EMOM', low:'Circuito con pausa fija'};
+    const tNotes={reduced:'Con el tiempo disponible, el Circuito A es la prioridad.',minimal:'Con poco tiempo, el Circuito A es suficiente para mantener el estímulo metabólico.'};
+    const eNotes={
+      high:'',
+      medium:'Energía algo baja: formato EMOM — el minuto estructura tu esfuerzo automáticamente, sin necesidad de ir al límite.',
+      low:'Baja energía: formato con pausa fija — trabajás a ritmo controlado con descanso garantizado entre rondas. El objetivo es completarlo.'
+    };
+    note=[tNotes[timeMode]||'',eNotes[energyMode]||''].filter(Boolean).join(' ');
+    if(energyMode!=='high') badge = badge==='normal' ? 'reduced' : badge;
+    return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
+  }
+  if(timeMode==='reduced'){s.blockB=orig.blockB.map(e=>({...e,sets:Math.min(e.sets,3)}));s.blockC=[];s.blockD=null;badge='reduced';}
+  else if(timeMode==='minimal'){s.blockB=orig.blockB.slice(0,2).map(e=>({...e,sets:Math.min(e.sets,2)}));s.blockC=[];s.blockD=null;badge='minimal';}
+  if(energyMode==='medium'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,1)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,1)}));if(badge==='normal')badge='reduced';}
+  else if(energyMode==='low'){s.blockB=s.blockB.map(e=>({...e,rir:adjRIR(e.rir,2)}));s.blockC=s.blockC.map(e=>({...e,rir:adjRIR(e.rir,2)}));if(badge==='normal')badge='reduced';}
+  const tNotes={normal:'',reduced:'Con el tiempo disponible, priorizamos los ejercicios principales — son los que más impacto tienen en tu objetivo.',minimal:'Con poco tiempo, los 2 ejercicios base son suficientes para mantener el estímulo muscular y seguir avanzando.'};
+  const eNotes={high:'',medium:'Energía algo baja: RIR +1 en todos los ejercicios. Misma sesión, un peldaño menos de intensidad.',low:'Baja energía: RIR +2, sin llegar al fallo. Sigue siendo un estímulo válido — completar la sesión hoy ya es una ganancia.'};
+  note=[tNotes[timeMode],eNotes[energyMode]].filter(Boolean).join(' ');
+  return{...s,ceoBadge:badge,ceoNote:note||null,ceoMod:note?{note}:null};
+}
+
+/* ============================================================ C1 NAME MAP */
+const C1_NAME_MAP = {"w1_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w1_d0_B__log1": "Press banca c/barra", "w1_d0_C__log0": "Remo en polea baja agarre neutro", "w1_d0_C__log1": "Zancada caminando c/mancuernas", "w1_d0_C__log2": "Elevación lateral mancuerna", "w1_d0_C__log3": "Abducción de cadera en máquina", "w1_d1_B__log0": "Plancha frontal con toques de hombro", "w1_d1_B__log1": "Dead bug c/peso ligero", "w1_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w1_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w1_d2_B__log1": "Jalón al pecho agarre amplio", "w1_d2_C__log0": "Hip thrust c/barra", "w1_d2_C__log1": "Press militar con mancuernas sentada", "w1_d2_C__log2": "Curl femoral en máquina/banco", "w1_d2_C__log3": "Face pull en polea", "w1_d3_B__log0": "Caminadora inclinada (LISS)", "w1_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w2_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w2_d0_B__log1": "Press banca c/barra", "w2_d0_C__log0": "Remo en polea baja agarre neutro", "w2_d0_C__log1": "Zancada caminando c/mancuernas", "w2_d0_C__log2": "Elevación lateral mancuerna", "w2_d0_C__log3": "Abducción de cadera en máquina", "w2_d1_B__log0": "Plancha frontal con toques de hombro", "w2_d1_B__log1": "Dead bug c/peso ligero", "w2_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w2_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w2_d2_B__log1": "Jalón al pecho agarre amplio", "w2_d2_C__log0": "Hip thrust c/barra", "w2_d2_C__log1": "Press militar con mancuernas sentada", "w2_d2_C__log2": "Curl femoral en máquina/banco", "w2_d2_C__log3": "Face pull en polea", "w2_d3_B__log0": "Caminadora inclinada (LISS)", "w2_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w3_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w3_d0_B__log1": "Press banca c/barra", "w3_d0_C__log0": "Remo en polea baja agarre neutro", "w3_d0_C__log1": "Zancada caminando c/mancuernas", "w3_d0_C__log2": "Elevación lateral mancuerna", "w3_d0_C__log3": "Abducción de cadera en máquina", "w3_d1_B__log0": "Plancha frontal con toques de hombro", "w3_d1_B__log1": "Dead bug c/peso ligero", "w3_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w3_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w3_d2_B__log1": "Jalón al pecho agarre amplio", "w3_d2_C__log0": "Hip thrust c/barra", "w3_d2_C__log1": "Press militar con mancuernas sentada", "w3_d2_C__log2": "Curl femoral en máquina/banco", "w3_d2_C__log3": "Face pull en polea", "w3_d3_B__log0": "Caminadora inclinada (LISS)", "w3_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w4_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w4_d0_B__log1": "Press banca c/barra", "w4_d0_C__log0": "Remo en polea baja agarre neutro", "w4_d0_C__log1": "Zancada caminando c/mancuernas", "w4_d0_C__log2": "Elevación lateral mancuerna", "w4_d0_C__log3": "Abducción de cadera en máquina", "w4_d1_B__log0": "Plancha frontal con toques de hombro", "w4_d1_B__log1": "Dead bug c/peso ligero", "w4_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w4_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w4_d2_B__log1": "Jalón al pecho agarre amplio", "w4_d2_C__log0": "Hip thrust c/barra", "w4_d2_C__log1": "Press militar con mancuernas sentada", "w4_d2_C__log2": "Curl femoral en máquina/banco", "w4_d2_C__log3": "Face pull en polea", "w4_d3_B__log0": "Caminadora inclinada (LISS)", "w4_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w5_d0_B__log0": "Sentadilla frontal c/barra", "w5_d0_B__log1": "Press inclinado c/mancuernas", "w5_d0_C__log0": "SS A1: Step up c/mancuernas", "w5_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w5_d0_C__log2": "SS B1: Elevación lateral en polea", "w5_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w5_d1_B__log0": "Plancha lateral c/elevación de cadera", "w5_d1_B__log1": "Rueda abdominal o press pallof", "w5_d1_C__log0": "HIIT — Intervalos 40/20", "w5_d2_B__log0": "Peso muerto convencional c/barra", "w5_d2_B__log1": "Dominadas asistidas o jalón supino", "w5_d2_C__log0": "SS A1: Leg press pies altos", "w5_d2_C__log1": "SS A2: Push press c/mancuernas", "w5_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w5_d2_C__log3": "Face pull + rotación externa banda", "w5_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w5_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w6_d0_B__log0": "Sentadilla frontal c/barra", "w6_d0_B__log1": "Press inclinado c/mancuernas", "w6_d0_C__log0": "SS A1: Step up c/mancuernas", "w6_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w6_d0_C__log2": "SS B1: Elevación lateral en polea", "w6_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w6_d1_B__log0": "Plancha lateral c/elevación de cadera", "w6_d1_B__log1": "Rueda abdominal o press pallof", "w6_d1_C__log0": "HIIT — Intervalos 40/20", "w6_d2_B__log0": "Peso muerto convencional c/barra", "w6_d2_B__log1": "Dominadas asistidas o jalón supino", "w6_d2_C__log0": "SS A1: Leg press pies altos", "w6_d2_C__log1": "SS A2: Push press c/mancuernas", "w6_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w6_d2_C__log3": "Face pull + rotación externa banda", "w6_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w6_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w7_d0_B__log0": "Sentadilla frontal c/barra", "w7_d0_B__log1": "Press inclinado c/mancuernas", "w7_d0_C__log0": "SS A1: Step up c/mancuernas", "w7_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w7_d0_C__log2": "SS B1: Elevación lateral en polea", "w7_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w7_d1_B__log0": "Plancha lateral c/elevación de cadera", "w7_d1_B__log1": "Rueda abdominal o press pallof", "w7_d1_C__log0": "HIIT — Intervalos 40/20", "w7_d2_B__log0": "Peso muerto convencional c/barra", "w7_d2_B__log1": "Dominadas asistidas o jalón supino", "w7_d2_C__log0": "SS A1: Leg press pies altos", "w7_d2_C__log1": "SS A2: Push press c/mancuernas", "w7_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w7_d2_C__log3": "Face pull + rotación externa banda", "w7_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w7_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w8_d0_B__log0": "Sentadilla frontal c/barra", "w8_d0_B__log1": "Press inclinado c/mancuernas", "w8_d0_C__log0": "SS A1: Step up c/mancuernas", "w8_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w8_d0_C__log2": "SS B1: Elevación lateral en polea", "w8_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w8_d1_B__log0": "Plancha lateral c/elevación de cadera", "w8_d1_B__log1": "Rueda abdominal o press pallof", "w8_d1_C__log0": "HIIT — Intervalos 40/20", "w8_d2_B__log0": "Peso muerto convencional c/barra", "w8_d2_B__log1": "Dominadas asistidas o jalón supino", "w8_d2_C__log0": "SS A1: Leg press pies altos", "w8_d2_C__log1": "SS A2: Push press c/mancuernas", "w8_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w8_d2_C__log3": "Face pull + rotación externa banda", "w8_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w8_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w9_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w9_d0_B__log1": "Press banca c/barra (pico)", "w9_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w9_d0_C__log1": "Remo en máquina T-bar", "w9_d0_C__log2": "Elevación lateral myo-reps", "w9_d1_B__log0": "Plancha con arrastre de mancuerna", "w9_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w9_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w9_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w9_d2_C__log0": "Hip thrust a una pierna", "w9_d2_C__log1": "Push press c/mancuernas", "w9_d2_C__log2": "Face pull + curl femoral (superserie final)", "w9_d3_B__log0": "Caminadora inclinada (LISS pico)", "w9_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w10_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w10_d0_B__log1": "Press banca c/barra (pico)", "w10_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w10_d0_C__log1": "Remo en máquina T-bar", "w10_d0_C__log2": "Elevación lateral myo-reps", "w10_d1_B__log0": "Plancha con arrastre de mancuerna", "w10_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w10_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w10_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w10_d2_C__log0": "Hip thrust a una pierna", "w10_d2_C__log1": "Push press c/mancuernas", "w10_d2_C__log2": "Face pull + curl femoral (superserie final)", "w10_d3_B__log0": "Caminadora inclinada (LISS pico)", "w10_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w11_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w11_d0_B__log1": "Press banca c/barra (pico)", "w11_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w11_d0_C__log1": "Remo en máquina T-bar", "w11_d0_C__log2": "Elevación lateral myo-reps", "w11_d1_B__log0": "Plancha con arrastre de mancuerna", "w11_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w11_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w11_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w11_d2_C__log0": "Hip thrust a una pierna", "w11_d2_C__log1": "Push press c/mancuernas", "w11_d2_C__log2": "Face pull + curl femoral (superserie final)", "w11_d3_B__log0": "Caminadora inclinada (LISS pico)", "w11_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w12_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w12_d0_B__log1": "Press banca c/barra (pico)", "w12_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w12_d0_C__log1": "Remo en máquina T-bar", "w12_d0_C__log2": "Elevación lateral myo-reps", "w12_d1_B__log0": "Plancha con arrastre de mancuerna", "w12_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w12_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w12_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w12_d2_C__log0": "Hip thrust a una pierna", "w12_d2_C__log1": "Push press c/mancuernas", "w12_d2_C__log2": "Face pull + curl femoral (superserie final)", "w12_d3_B__log0": "Caminadora inclinada (LISS pico)", "w12_d3_C__log0": "HIIT corto opcional (si energía lo permite)"};
+
+function findLastRecord(exName, currentWeek, currentDayIdx, currentPhase, currentIdx) {
+  const currentLogKey = 'w' + currentWeek + '_d' + currentDayIdx + '_' + currentPhase + '__log' + currentIdx;
+  const nameNorm = exName.toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '').replace(/\s*\([^)]*\)\s*/g, '').trim();
+  const results = [];
+
+  // Iterar todas las claves del logData
+  for (const key of Object.keys(state.logData)) {
+    if (key === currentLogKey) continue;
+    // Solo claves de log de ejercicios (formato: wN_dN_X__logN)
+    if (!key.match(/^w\d+_d\d+_[BCD]__log\d+$/)) continue;
+
+    const entry = state.logData[key];
+    if (!entry) continue;
+    if (!entry.sets || !entry.sets.some(s => s.kg || s.reps)) continue;
+
+    // Ver si tiene nombre guardado (el alumno lo editó)
+    const nameKey = key + '__name';
+    const savedName = (state.logData[nameKey] && state.logData[nameKey].v) || '';
+    if (savedName) {
+      const savedNorm = savedName.toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '');
+      if (savedNorm === nameNorm) {
+        // Extraer semana y día de la clave para ordenar
+        const m = key.match(/^w(\d+)_d(\d+)/);
+        results.push({ week: parseInt(m[1]), day: parseInt(m[2]), key, entry });
+        continue;
+      }
+    }
+
+    // Si no tiene nombre guardado, buscar en el plan por posición
+    try {
+      const m = key.match(/^w(\d+)_d(\d+)_([BCD])__log(\d+)$/);
+      if (!m) continue;
+      const w = parseInt(m[1]), d = parseInt(m[2]), ph = m[3], idx = parseInt(m[4]);
+      const sessDays = getSessions(w);
+      if (!sessDays || !sessDays[d]) continue;
+      const sess = sessDays[d];
+      const blockKey = ph === 'B' ? 'blockB' : ph === 'C' ? 'blockC' : 'blockD';
+      const block = sess[blockKey];
+      if (!block || !block[idx]) continue;
+      const planName = (block[idx].name || '').toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '');
+      if (planName === nameNorm) {
+        results.push({ week: w, day: d, key, entry });
+      }
+    } catch(e) {}
+  }
+
+  // Buscar en historial Ciclo 1 usando mapa de posiciones
+  if (state.logDataC1 && C1_NAME_MAP) {
+    for (const key of Object.keys(state.logDataC1)) {
+      if (!key.match(/^w\d+_d\d+_[BCD]__log\d+$/)) continue;
+      const entry = state.logDataC1[key];
+      if (!entry || !entry.sets || !entry.sets.some(s => s.kg || s.reps)) continue;
+      const mappedName = C1_NAME_MAP[key] || '';
+      const savedName = (state.logDataC1[key+'__name'] && state.logDataC1[key+'__name'].v) || '';
+      const candidateName = (mappedName || savedName).toLowerCase().trim()
+        .replace(/^ss [ab]\d:\s*/i, '').replace(/\s*\([^)]*\)\s*/g, '').trim();
+      if (candidateName && candidateName === nameNorm) {
+        const m = key.match(/^w(\d+)_d(\d+)/);
+        if (m) results.push({ week: parseInt(m[1]), day: parseInt(m[2]), key, entry, fromC1: true });
+      }
+    }
+  }
+
+  if (!results.length) return null;
+  // C2 tiene prioridad sobre C1 — devolver el más reciente
+  const c2r = results.filter(r => !r.fromC1);
+  const c1r = results.filter(r => r.fromC1);
+  if (c2r.length) {
+    c2r.sort((a, b) => a.week !== b.week ? a.week - b.week : a.day - b.day);
+    return c2r[c2r.length - 1];
+  }
+  c1r.sort((a, b) => a.week !== b.week ? a.week - b.week : a.day - b.day);
+  const best = c1r[c1r.length - 1];
+  if (best) best.fromC1label = '(Ciclo 1)';
+  return best || null;
+}
+
+/* ============================================================ RENDER */
 
 
+function renderExerciseList(frag, exercises, week, dayIdx, phase) {
+  let i = 0;
+  while (i < exercises.length) {
+    const ex = exercises[i];
+    const ssGroup = getSupersetGroup(ex.name); // null si no es SS, "A1"/"A2" etc si lo es
 
+    if (ssGroup) {
+      // Recopilar todos los ejercicios de esta superserie
+      const groupExs = [];
+      while (i < exercises.length && getSupersetGroup(exercises[i].name) === ssGroup) {
+        groupExs.push({ ex: exercises[i], idx: i });
+        i++;
+      }
+
+      // Contenedor visual de superserie
+      const groupEl = document.createElement('div');
+      groupEl.className = 'supersetie-group';
+
+      // Label
+      const labelEl = document.createElement('div');
+      labelEl.className = 'superserie-label';
+      labelEl.innerHTML = '⚡ SUPERSERIE ' + ssGroup + ' — ' + groupExs.length + ' ejercicios seguidos';
+      groupEl.appendChild(labelEl);
+
+      // Instrucciones
+      const instrEl = document.createElement('div');
+      instrEl.className = 'superserie-instructions';
+      const restText = groupExs[groupExs.length-1].ex.rest || '60 seg';
+      instrEl.innerHTML = '<strong>¿Cómo ejecutar la superserie?</strong><br>' +
+        '1. Hacé todas las reps del Ejercicio 1 → sin descanso pasás inmediatamente al Ejercicio 2 (y siguientes si hay más).<br>' +
+        '2. Eso completa <strong>1 ronda</strong> de la superserie.<br>' +
+        '3. Descansás <strong>' + restText + '</strong> — este es el único descanso entre rondas.<br>' +
+        '4. Volvés al Ejercicio 1 y repetís hasta completar todas las series indicadas.<br>' +
+        '<em>⚠️ No hay descanso entre los ejercicios dentro de cada ronda.</em>';
+      groupEl.appendChild(instrEl);
+
+      // Tarjetas de ejercicios
+      groupExs.forEach(({ ex: e, idx }) => {
+        const exName = getSSBaseName(e.name);
+        const modEx = Object.assign({}, e, { name: exName });
+        groupEl.appendChild(renderExCard(week, dayIdx, phase, idx, modEx));
+      });
+
+      frag.appendChild(groupEl);
+    } else {
+      frag.appendChild(renderExCard(week, dayIdx, phase, i, ex));
+      i++;
+    }
+  }
+}
 
 function renderSession(week, dayIdx, session, _tMode, _eMode) {
   const frag = document.createDocumentFragment();
@@ -1238,10 +920,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   if (!_tMode || !_eMode) {
     const sel = renderCEOSelector(week, dayIdx, session, (tMode, eMode) => {
       const adapted = adaptSession(session, tMode, eMode, week, dayIdx);
-      const sessionToRender = Object.assign({}, adapted, {
-        ceoBadge: adapted.ceoBadge || 'normal',
-        ceoNote: adapted.ceoNote || null,
-      });
+      const sessionToRender = Object.assign({}, adapted, {ceoBadge:adapted.ceoBadge||'normal',ceoNote:adapted.ceoNote||null});
       const area = document.getElementById('session-area');
       if (area) { area.innerHTML = ''; area.appendChild(renderSession(week, dayIdx, sessionToRender, tMode, eMode)); }
     });
@@ -1259,7 +938,6 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     ));
   }
 
-  // Mensaje motivador según semana y energía
   const energyMsg = getEnergyMessage(week, _eMode);
   if (energyMsg) {
     const msgWrap = document.createElement('div');
@@ -1271,13 +949,15 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     frag.appendChild(msgWrap);
   }
 
+  frag.appendChild(renderCicloHormonal());
+
   const isUpper = session.dayType === 'upper';
   const isCardio = session.dayType === 'cardio';
   const doneKey = `w${week}_d${dayIdx}__done`;
   const isDone = !!state.sessionDone[doneKey];
 
   // Badge
-  const badgeText = session.dayFocus || (isUpper ? 'Tren Superior' : isCardio ? 'Cardio' : 'Fuerza');
+  const badgeText = isUpper ? 'Tren Superior' : isCardio ? 'Cardio' : 'Pierna 🦴';
   const badgeEl = h('div', {id:'session-badge'},
     h('span', {className:'badge badge-' + (isUpper ? 'upper' : 'accent')}, badgeText)
   );
@@ -1315,7 +995,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
 
   // Fase A — Calentamiento dinámico: 4 slots de movilidad + 3 de core
   // Sin ejercicios fijos — el coach puede variarlos cambiando los links
-  frag.appendChild(h('div', {className:'phase-label'}, 'Entrada en calor (5-8 min)'));
+  frag.appendChild(h('div', {className:'phase-label'}, 'Fase A — Calentamiento dinámico (5-8 min)'));
 
   var wuSlots = [
     { key:'mov1', label:'Movilidad 1' },
@@ -1400,12 +1080,12 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
   });
 
   // Fase B
-  frag.appendChild(h('div', {className:'phase-label'}, 'Fuerza Principal'));
+  frag.appendChild(h('div', {className:'phase-label'}, 'Fase B — Fuerza / Hipertrofia principal'));
   renderExerciseList(frag, session.blockB, week, dayIdx, 'B');
 
   // Fase C
   if (session.blockC && session.blockC.length) {
-    frag.appendChild(h('div', {className:'phase-label'}, 'Fuerza Accesoria'));
+    frag.appendChild(h('div', {className:'phase-label'}, 'Fase C — Hipertrofia accesoria'));
     renderExerciseList(frag, session.blockC, week, dayIdx, 'C');
   }
 
@@ -1414,7 +1094,7 @@ function renderSession(week, dayIdx, session, _tMode, _eMode) {
     ? 'Podés cerrar con 5-8 min de movilidad de hombros y estiramiento de pectorales.'
     : 'Si terminaste con energía, sumá 8-12 min de cardio en bici o caminadora a ritmo sostenido (RPE 5-6).');
   frag.appendChild(h('div', {className:'phase-d'},
-    h('strong', null, isUpper ? 'Movilidad de cierre:' : 'Cardio opcional:'),
+    h('strong', null, 'Fase D — ' + (isUpper ? 'Movilidad de cierre: ' : 'Cardio opcional de cierre: ')),
     faseDText
   ));
 
@@ -1495,89 +1175,7 @@ function getTechNote(name, reps) {
 }
 
 // ── Buscar historial del ejercicio en sesiones anteriores ────────────────────
-const C1_NAME_MAP = {"w1_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w1_d0_B__log1": "Press banca c/barra", "w1_d0_C__log0": "Remo en polea baja agarre neutro", "w1_d0_C__log1": "Zancada caminando c/mancuernas", "w1_d0_C__log2": "Elevación lateral mancuerna", "w1_d0_C__log3": "Abducción de cadera en máquina", "w1_d1_B__log0": "Plancha frontal con toques de hombro", "w1_d1_B__log1": "Dead bug c/peso ligero", "w1_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w1_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w1_d2_B__log1": "Jalón al pecho agarre amplio", "w1_d2_C__log0": "Hip thrust c/barra", "w1_d2_C__log1": "Press militar con mancuernas sentada", "w1_d2_C__log2": "Curl femoral en máquina/banco", "w1_d2_C__log3": "Face pull en polea", "w1_d3_B__log0": "Caminadora inclinada (LISS)", "w1_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w2_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w2_d0_B__log1": "Press banca c/barra", "w2_d0_C__log0": "Remo en polea baja agarre neutro", "w2_d0_C__log1": "Zancada caminando c/mancuernas", "w2_d0_C__log2": "Elevación lateral mancuerna", "w2_d0_C__log3": "Abducción de cadera en máquina", "w2_d1_B__log0": "Plancha frontal con toques de hombro", "w2_d1_B__log1": "Dead bug c/peso ligero", "w2_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w2_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w2_d2_B__log1": "Jalón al pecho agarre amplio", "w2_d2_C__log0": "Hip thrust c/barra", "w2_d2_C__log1": "Press militar con mancuernas sentada", "w2_d2_C__log2": "Curl femoral en máquina/banco", "w2_d2_C__log3": "Face pull en polea", "w2_d3_B__log0": "Caminadora inclinada (LISS)", "w2_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w3_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w3_d0_B__log1": "Press banca c/barra", "w3_d0_C__log0": "Remo en polea baja agarre neutro", "w3_d0_C__log1": "Zancada caminando c/mancuernas", "w3_d0_C__log2": "Elevación lateral mancuerna", "w3_d0_C__log3": "Abducción de cadera en máquina", "w3_d1_B__log0": "Plancha frontal con toques de hombro", "w3_d1_B__log1": "Dead bug c/peso ligero", "w3_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w3_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w3_d2_B__log1": "Jalón al pecho agarre amplio", "w3_d2_C__log0": "Hip thrust c/barra", "w3_d2_C__log1": "Press militar con mancuernas sentada", "w3_d2_C__log2": "Curl femoral en máquina/banco", "w3_d2_C__log3": "Face pull en polea", "w3_d3_B__log0": "Caminadora inclinada (LISS)", "w3_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w4_d0_B__log0": "Sentadilla búlgara c/mancuernas", "w4_d0_B__log1": "Press banca c/barra", "w4_d0_C__log0": "Remo en polea baja agarre neutro", "w4_d0_C__log1": "Zancada caminando c/mancuernas", "w4_d0_C__log2": "Elevación lateral mancuerna", "w4_d0_C__log3": "Abducción de cadera en máquina", "w4_d1_B__log0": "Plancha frontal con toques de hombro", "w4_d1_B__log1": "Dead bug c/peso ligero", "w4_d1_C__log0": "EMOM 14 min — Bloque metabólico", "w4_d2_B__log0": "Peso muerto rumano unilateral c/mancuerna", "w4_d2_B__log1": "Jalón al pecho agarre amplio", "w4_d2_C__log0": "Hip thrust c/barra", "w4_d2_C__log1": "Press militar con mancuernas sentada", "w4_d2_C__log2": "Curl femoral en máquina/banco", "w4_d2_C__log3": "Face pull en polea", "w4_d3_B__log0": "Caminadora inclinada (LISS)", "w4_d3_C__log0": "Movilidad torácica + cadera (circuito libre)", "w5_d0_B__log0": "Sentadilla frontal c/barra", "w5_d0_B__log1": "Press inclinado c/mancuernas", "w5_d0_C__log0": "SS A1: Step up c/mancuernas", "w5_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w5_d0_C__log2": "SS B1: Elevación lateral en polea", "w5_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w5_d1_B__log0": "Plancha lateral c/elevación de cadera", "w5_d1_B__log1": "Rueda abdominal o press pallof", "w5_d1_C__log0": "HIIT — Intervalos 40/20", "w5_d2_B__log0": "Peso muerto convencional c/barra", "w5_d2_B__log1": "Dominadas asistidas o jalón supino", "w5_d2_C__log0": "SS A1: Leg press pies altos", "w5_d2_C__log1": "SS A2: Push press c/mancuernas", "w5_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w5_d2_C__log3": "Face pull + rotación externa banda", "w5_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w5_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w6_d0_B__log0": "Sentadilla frontal c/barra", "w6_d0_B__log1": "Press inclinado c/mancuernas", "w6_d0_C__log0": "SS A1: Step up c/mancuernas", "w6_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w6_d0_C__log2": "SS B1: Elevación lateral en polea", "w6_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w6_d1_B__log0": "Plancha lateral c/elevación de cadera", "w6_d1_B__log1": "Rueda abdominal o press pallof", "w6_d1_C__log0": "HIIT — Intervalos 40/20", "w6_d2_B__log0": "Peso muerto convencional c/barra", "w6_d2_B__log1": "Dominadas asistidas o jalón supino", "w6_d2_C__log0": "SS A1: Leg press pies altos", "w6_d2_C__log1": "SS A2: Push press c/mancuernas", "w6_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w6_d2_C__log3": "Face pull + rotación externa banda", "w6_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w6_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w7_d0_B__log0": "Sentadilla frontal c/barra", "w7_d0_B__log1": "Press inclinado c/mancuernas", "w7_d0_C__log0": "SS A1: Step up c/mancuernas", "w7_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w7_d0_C__log2": "SS B1: Elevación lateral en polea", "w7_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w7_d1_B__log0": "Plancha lateral c/elevación de cadera", "w7_d1_B__log1": "Rueda abdominal o press pallof", "w7_d1_C__log0": "HIIT — Intervalos 40/20", "w7_d2_B__log0": "Peso muerto convencional c/barra", "w7_d2_B__log1": "Dominadas asistidas o jalón supino", "w7_d2_C__log0": "SS A1: Leg press pies altos", "w7_d2_C__log1": "SS A2: Push press c/mancuernas", "w7_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w7_d2_C__log3": "Face pull + rotación externa banda", "w7_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w7_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w8_d0_B__log0": "Sentadilla frontal c/barra", "w8_d0_B__log1": "Press inclinado c/mancuernas", "w8_d0_C__log0": "SS A1: Step up c/mancuernas", "w8_d0_C__log1": "SS A2: Remo mancuerna a un brazo", "w8_d0_C__log2": "SS B1: Elevación lateral en polea", "w8_d0_C__log3": "SS B2: Abducción de cadera de pie en polea", "w8_d1_B__log0": "Plancha lateral c/elevación de cadera", "w8_d1_B__log1": "Rueda abdominal o press pallof", "w8_d1_C__log0": "HIIT — Intervalos 40/20", "w8_d2_B__log0": "Peso muerto convencional c/barra", "w8_d2_B__log1": "Dominadas asistidas o jalón supino", "w8_d2_C__log0": "SS A1: Leg press pies altos", "w8_d2_C__log1": "SS A2: Push press c/mancuernas", "w8_d2_C__log2": "Curl femoral nórdico asistido o en máquina", "w8_d2_C__log3": "Face pull + rotación externa banda", "w8_d3_B__log0": "Caminadora inclinada (LISS progresivo)", "w8_d3_C__log0": "Circuito core (3 rondas, sin pausa entre ejercicios)", "w9_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w9_d0_B__log1": "Press banca c/barra (pico)", "w9_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w9_d0_C__log1": "Remo en máquina T-bar", "w9_d0_C__log2": "Elevación lateral myo-reps", "w9_d1_B__log0": "Plancha con arrastre de mancuerna", "w9_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w9_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w9_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w9_d2_C__log0": "Hip thrust a una pierna", "w9_d2_C__log1": "Push press c/mancuernas", "w9_d2_C__log2": "Face pull + curl femoral (superserie final)", "w9_d3_B__log0": "Caminadora inclinada (LISS pico)", "w9_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w10_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w10_d0_B__log1": "Press banca c/barra (pico)", "w10_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w10_d0_C__log1": "Remo en máquina T-bar", "w10_d0_C__log2": "Elevación lateral myo-reps", "w10_d1_B__log0": "Plancha con arrastre de mancuerna", "w10_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w10_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w10_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w10_d2_C__log0": "Hip thrust a una pierna", "w10_d2_C__log1": "Push press c/mancuernas", "w10_d2_C__log2": "Face pull + curl femoral (superserie final)", "w10_d3_B__log0": "Caminadora inclinada (LISS pico)", "w10_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w11_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w11_d0_B__log1": "Press banca c/barra (pico)", "w11_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w11_d0_C__log1": "Remo en máquina T-bar", "w11_d0_C__log2": "Elevación lateral myo-reps", "w11_d1_B__log0": "Plancha con arrastre de mancuerna", "w11_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w11_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w11_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w11_d2_C__log0": "Hip thrust a una pierna", "w11_d2_C__log1": "Push press c/mancuernas", "w11_d2_C__log2": "Face pull + curl femoral (superserie final)", "w11_d3_B__log0": "Caminadora inclinada (LISS pico)", "w11_d3_C__log0": "HIIT corto opcional (si energía lo permite)", "w12_d0_B__log0": "Sentadilla trasera c/barra (pico)", "w12_d0_B__log1": "Press banca c/barra (pico)", "w12_d0_C__log0": "Zancada búlgara con salto (regresión: sin salto)", "w12_d0_C__log1": "Remo en máquina T-bar", "w12_d0_C__log2": "Elevación lateral myo-reps", "w12_d1_B__log0": "Plancha con arrastre de mancuerna", "w12_d1_C__log0": "For Time — 4 rondas lo más rápido posible (técnica primero)", "w12_d2_B__log0": "Peso muerto rumano c/barra (pico)", "w12_d2_B__log1": "Jalón al pecho agarre cerrado (pico)", "w12_d2_C__log0": "Hip thrust a una pierna", "w12_d2_C__log1": "Push press c/mancuernas", "w12_d2_C__log2": "Face pull + curl femoral (superserie final)", "w12_d3_B__log0": "Caminadora inclinada (LISS pico)", "w12_d3_C__log0": "HIIT corto opcional (si energía lo permite)"};
-
 function findLastRecord(exName, currentWeek, currentDayIdx, currentPhase, currentIdx) {
-  const currentLogKey = 'w' + currentWeek + '_d' + currentDayIdx + '_' + currentPhase + '__log' + currentIdx;
-  const nameNorm = exName.toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '').replace(/\s*\([^)]*\)\s*/g, '').trim();
-  const results = [];
-
-  // Iterar todas las claves del logData
-  for (const key of Object.keys(state.logData)) {
-    if (key === currentLogKey) continue;
-    // Solo claves de log de ejercicios (formato: wN_dN_X__logN)
-    if (!key.match(/^w\d+_d\d+_[BCD]__log\d+$/)) continue;
-
-    const entry = state.logData[key];
-    if (!entry) continue;
-    if (!entry.sets || !entry.sets.some(s => s.kg || s.reps)) continue;
-
-    // Ver si tiene nombre guardado (el alumno lo editó)
-    const nameKey = key + '__name';
-    const savedName = (state.logData[nameKey] && state.logData[nameKey].v) || '';
-    if (savedName) {
-      const savedNorm = savedName.toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '');
-      if (savedNorm === nameNorm) {
-        // Extraer semana y día de la clave para ordenar
-        const m = key.match(/^w(\d+)_d(\d+)/);
-        results.push({ week: parseInt(m[1]), day: parseInt(m[2]), key, entry });
-        continue;
-      }
-    }
-
-    // Si no tiene nombre guardado, buscar en el plan por posición
-    try {
-      const m = key.match(/^w(\d+)_d(\d+)_([BCD])__log(\d+)$/);
-      if (!m) continue;
-      const w = parseInt(m[1]), d = parseInt(m[2]), ph = m[3], idx = parseInt(m[4]);
-      const sessDays = getSessions(w);
-      if (!sessDays || !sessDays[d]) continue;
-      const sess = sessDays[d];
-      const blockKey = ph === 'B' ? 'blockB' : ph === 'C' ? 'blockC' : 'blockD';
-      const block = sess[blockKey];
-      if (!block || !block[idx]) continue;
-      const planName = (block[idx].name || '').toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '');
-      if (planName === nameNorm) {
-        results.push({ week: w, day: d, key, entry });
-      }
-    } catch(e) {}
-  }
-
-  // Buscar en historial Ciclo 1 usando mapa de posiciones
-  if (state.logDataC1 && C1_NAME_MAP) {
-    for (const key of Object.keys(state.logDataC1)) {
-      if (!key.match(/^w\d+_d\d+_[BCD]__log\d+$/)) continue;
-      const entry = state.logDataC1[key];
-      if (!entry || !entry.sets || !entry.sets.some(s => s.kg || s.reps)) continue;
-      const mappedName = C1_NAME_MAP[key] || '';
-      const savedName = (state.logDataC1[key+'__name'] && state.logDataC1[key+'__name'].v) || '';
-      const candidateName = (mappedName || savedName).toLowerCase().trim()
-        .replace(/^ss [ab]\d:\s*/i, '').replace(/\s*\([^)]*\)\s*/g, '').trim();
-      if (candidateName && candidateName === nameNorm) {
-        const m = key.match(/^w(\d+)_d(\d+)/);
-        if (m) results.push({ week: parseInt(m[1]), day: parseInt(m[2]), key, entry, fromC1: true });
-      }
-    }
-  }
-
-  if (!results.length) return null;
-  // C2 tiene prioridad sobre C1 — devolver el más reciente
-  const c2r = results.filter(r => !r.fromC1);
-  const c1r = results.filter(r => r.fromC1);
-  if (c2r.length) {
-    c2r.sort((a, b) => a.week !== b.week ? a.week - b.week : a.day - b.day);
-    return c2r[c2r.length - 1];
-  }
-  c1r.sort((a, b) => a.week !== b.week ? a.week - b.week : a.day - b.day);
-  const best = c1r[c1r.length - 1];
-  if (best) best.fromC1label = '(Ciclo 1)';
-  return best || null;
-}
-
-
-// findLastRecord_end
-// findLastRecord_old_removed
-function findLastRecord_old(exName, currentWeek, currentDayIdx, currentPhase, currentIdx) {
   const currentLogKey = 'w' + currentWeek + '_d' + currentDayIdx + '_' + currentPhase + '__log' + currentIdx;
   const nameNorm = exName.toLowerCase().trim().replace(/^ss [ab]\d:\s*/i, '');
   const results = [];
@@ -1856,6 +1454,7 @@ function renderExCard(week, dayIdx, phase, idx, exObj) {
 /* ============================================================
    RENDER: STATS TAB
    ============================================================ */
+
 function renderStats() {
   const c = document.getElementById('content');
   c.innerHTML = '';
@@ -1913,7 +1512,7 @@ function renderStats() {
   });
 
   c.appendChild(h('div', {style:'margin-top:18px;padding:14px 16px;background:var(--surface);border:1px dashed var(--border);border-radius:10px;font-size:13px;color:var(--dim);line-height:1.6'},
-    'Estas cifras reflejan lo que marcaste como completado y los datos que registraste en cada serie. Usálas para ver tu constancia semana a semana — lo que importa es la tendencia a lo largo de las 8 semanas.'
+    'Estas cifras reflejan lo que marcaste como completado y los datos que registraste en cada serie. Usálas para ver tu constancia semana a semana — lo que importa es la tendencia a lo largo de las 12 semanas.'
   ));
 }
 
@@ -1923,7 +1522,7 @@ function renderStats() {
 const GUIDE_SECTIONS = [
   { id:'config', title:'⚙️ Configuración del plan', content: () => {
     const box = h('div', null);
-    box.appendChild(h('label', {className:'config-label'}, 'Fecha de inicio del plan (para calcular el rango de 8 semanas)'));
+    box.appendChild(h('label', {className:'config-label'}, 'Fecha de inicio del plan (para calcular el rango de 12 semanas)'));
     const dateInput = h('input', {type:'date', className:'config-input', value: state.planStart||''});
     dateInput.addEventListener('change', () => {
       state.planStart = dateInput.value;
@@ -1989,7 +1588,7 @@ const GUIDE_SECTIONS = [
   { id:'mentalidad', title:'💛 Una nota para los días difíciles', content: () => {
     const d = h('div', null);
     d.innerHTML = `<p>Vas a tener semanas donde la rodilla moleste más, días sin ganas de entrenar, o comidas fuera del plan. Eso es parte normal del proceso.</p>
-    <p>Lo que construye el resultado de estos 3 meses no es ningún día perfecto aislado — es el promedio de tus decisiones a lo largo de las 8 semanas. Confiá en el proceso.</p>`;
+    <p>Lo que construye el resultado de estos 3 meses no es ningún día perfecto aislado — es el promedio de tus decisiones a lo largo de las 12 semanas. Confiá en el proceso.</p>`;
     return d;
   }},
   { id:'comousar', title:'📋 Cómo usar esta herramienta', content: () => {
@@ -2036,6 +1635,9 @@ function renderGuide() {
    ============================================================ */
 
 
+
+
+
 function getRecipesForWeek(w){const g=RECIPES.find(r=>r.weeks.includes(w));return g?g.recipes:RECIPES[0].recipes;}
 function renderRecipes(){
   const c=document.getElementById('content');c.innerHTML='';
@@ -2050,18 +1652,16 @@ function renderRecipes(){
   });
   c.appendChild(wrap);
 }
+
 function switchTab(tab) {
   state.tab = tab;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'plan') renderPlan();
   else if (tab === 'stats') renderStats();
-  else if(tab==='recetas') renderRecipes();
+  else if (tab === 'recetas') renderRecipes();
   else renderGuide();
 }
 
-/* ============================================================
-   NAME EDITING
-   ============================================================ */
 function startEditName() {
   if (isReadOnlyMode()) return;
   const display = document.getElementById('student-name-display');
@@ -2071,45 +1671,12 @@ function startEditName() {
   input.style.display = 'inline-block';
   input.focus();
 }
-function commitName() {
-  const input = document.getElementById('student-name-input');
-  const display = document.getElementById('student-name-display');
-  state.studentName = input.value;
-  save();
-  input.style.display = 'none';
-  display.style.display = 'inline';
-  renderHeader();
-}
 
-/* ============================================================
-   EXPORT / IMPORT
-   ============================================================ */
-/* ============================================================ GITHUB PROGRESS SYNC */
-const WORKER_URL = 'https://impetus-sync.martinmamchur.workers.dev';
-const WORKER_REPO = 'PlanOnline-Romina';
 
-function showSyncMsg(text,type){const el=document.getElementById('sync-msg');if(!el)return;el.textContent=text;el.style.color=type==='ok'?'var(--ceo-blue)':type==='err'?'#ff6b6b':'var(--dim)';if(text)setTimeout(()=>{el.textContent='';},3000);}
-
-async function ghLoadProgress(){try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso_c2.json&t='+Date.now());if(!res.ok)return null;return await res.json();}catch(e){return null;}}
-async function ghLoadCiclo1(){try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso.json&t='+Date.now());if(!res.ok)return null;return await res.json();}catch(e){return null;}}
-async function ghSaveProgress(){showSyncMsg('Sincronizando...','');const data={app:'plan-romina-ceo-c2',exportedAt:new Date().toISOString(),planStart:state.planStart,logData:state.logData,videos:state.videos,sessionDone:state.sessionDone};try{const res=await fetch(WORKER_URL+'?repo='+WORKER_REPO+'&file=progreso_c2.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(res.ok){showSyncMsg('☁ Sincronizado','ok');}else{showSyncMsg('✗ Error ('+res.status+')','err');}}catch(e){showSyncMsg('✗ Error','err');}}
-async function reloadProgress(){
-  showSyncMsg('Actualizando...','');
-  try {
-    const p = await ghLoadProgress();
-    if(p && p.logData && p.app==='plan-romina-ceo-c2'){
-      state.logData=p.logData; state.sessionDone=p.sessionDone||{};
-      if(p.planStart) state.planStart=p.planStart;
-      storageSet('logData',state.logData); storageSet('sessionDone',state.sessionDone); storageSet('planStart',state.planStart);
-    }
-    const c1 = await ghLoadCiclo1();
-    if(c1 && c1.logData) state.logDataC1 = c1.logData;
-    renderHeader(); renderPlan();
-    showSyncMsg('✓ Actualizado','ok');
-  } catch(e){ showSyncMsg('✗ Error','err'); }
-}
 
 /* ============================================================ EXPORT / IMPORT */
+/* ============================================================ EXPORT / IMPORT */
+
 function resetAll() {
   if (isReadOnlyMode()) { showSyncMsg('Desactivá el modo lectura para poder reiniciar datos','err'); return; }
   if (!confirm('Esto borrará todo el registro guardado (series, videos, sesiones completadas y nombre). ¿Seguro?')) return;
@@ -2121,6 +1688,7 @@ function resetAll() {
 /* ============================================================
    BOOT
    ============================================================ */
+
 function _showError(msg, detail) {
   var c = document.getElementById('content');
   if (!c) return;
@@ -2132,26 +1700,10 @@ function _showError(msg, detail) {
 }
 
 async function _boot() {
-  // Cargar videos desde GitHub
   try {
     const ghVideos = await ghGetVideos();
-    if (ghVideos && typeof ghVideos === 'object') {
-      state.videos = ghVideos;
-      save();
-    }
+    if (ghVideos && typeof ghVideos === 'object') { state.videos = ghVideos; save(); }
   } catch(e) {}
-
-  // Cargar progreso desde GitHub
-  try {
-    const ghProgress = await ghLoadProgress();
-    if (ghProgress && ghProgress.logData) {
-      state.logData = ghProgress.logData;
-      state.sessionDone = ghProgress.sessionDone || {};
-      if(ghProgress.planStart) state.planStart = ghProgress.planStart;
-      save();
-    }
-  } catch(e) {}
-
   try {
     const p = await ghLoadProgress();
     if (p && p.logData && p.app === 'plan-romina-ceo-c2') {
@@ -2165,11 +1717,94 @@ async function _boot() {
   renderHeader();
   renderPlan();
 }
+
+function renderHeader() {
+  const nameEl = document.getElementById('student-name-display');
+  const nameInput = document.getElementById('student-name-input');
+  nameEl.textContent = state.studentName ? '– ' + state.studentName.toUpperCase() : 'TOCAR PARA PONER NOMBRE';
+
+  document.getElementById('date-range').textContent = dateRange();
+  document.getElementById('completed-count').textContent = completedWeeks();
+
+  const cw = completedWeeks();
+  const segs = document.getElementById('progress-segs');
+  segs.innerHTML = '';
+  for (let i = 1; i <= 12; i++) {
+    const seg = h('div', {className: 'prog-seg' + (i <= cw ? ' done' : '')});
+    segs.appendChild(seg);
+  }
+
+  const roBtn = document.getElementById('readonly-toggle-btn');
+  const roBanner = document.getElementById('readonly-banner');
+  if (roBtn) {
+    const ro = isReadOnlyMode();
+    roBtn.textContent = ro ? '👁 MODO LECTURA: ON' : '👁 MODO LECTURA: OFF';
+    roBtn.style.borderColor = ro ? 'var(--accent)' : '';
+    roBtn.style.color = ro ? 'var(--accent)' : '';
+    if (roBanner) roBanner.style.display = ro ? 'block' : 'none';
+  }
+}
+
+/* ============================================================
+   RENDER: PLAN TAB
+   ============================================================ */
+
+function renderPlan() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+
+  // Week selector
+  const label = h('div', {className:'phase-label', style:'margin-bottom:8px'}, 'Bloques del plan');
+  const weekRow = h('div', {className:'scroll', id:'week-selector'});
+  for (let w = 1; w <= 12; w++) {
+    const btn = h('button', {className:'week-btn mono' + (w === state.week ? ' active' : ''), onclick:() => { state.week = w; state.day = 0; renderPlan(); renderHeader(); }}, 'S' + w);
+    weekRow.appendChild(btn);
+  }
+
+  const meso = getWeekMeso(state.week);
+  const sessions = getWeekSessions(state.week);
+
+  // Block card
+  const blockCard = h('div', {id:'block-card'},
+    h('div', {id:'block-label'}, meso.name.toUpperCase() + ': ' + meso.subtitle.toUpperCase()),
+    h('div', {id:'block-focus'}, meso.focus)
+  );
+
+  // Day tabs
+  const dayRow = h('div', {className:'scroll', id:'day-tabs'});
+  sessions.forEach((s, i) => {
+    const dot = h('span', {className:'day-dot'});
+    const btn = h('button', {
+      className:'day-btn' + (i === state.day ? ' active' : ''),
+      onclick:() => { state.day = i; renderPlan(); }
+    }, dot, s.dayLabel);
+    dayRow.appendChild(btn);
+  });
+
+  c.appendChild(label);
+  c.appendChild(weekRow);
+  c.appendChild(blockCard);
+  c.appendChild(dayRow);
+  const sessionArea = h('div', {id:'session-area'});
+  sessionArea.appendChild(renderSession(state.week, state.day, sessions[state.day]));
+  c.appendChild(sessionArea);
+}
+
+/* ============================================================
+   RENDER: SESSION
+   ============================================================ */
+
+function flushAutoSync() { ghSaveProgress(); }
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') flushAutoSync();
+});
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() { _boot(); });
 } else {
   _boot();
 }
+
 </script>
 </body>
 </html>
