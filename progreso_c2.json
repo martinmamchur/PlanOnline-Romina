@@ -1,10 +1,126 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-09-16T12:01:20.235Z",
+  "exportedAt": "2026-09-16T12:01:25.181Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
       "done": false
+    },
+    "w1_d2_B__log0": {
+      "sets": [
+        {
+          "kg": "37,5",
+          "reps": "8"
+        },
+        {
+          "kg": "37,5",
+          "reps": "8"
+        },
+        {
+          "kg": "37,5",
+          "reps": "8"
+        },
+        {
+          "kg": "37,5",
+          "reps": "8"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d2_B__log1": {
+      "sets": [
+        {
+          "kg": "31, 8",
+          "reps": "10"
+        },
+        {
+          "kg": "31,8",
+          "reps": "10"
+        },
+        {
+          "kg": "31,8",
+          "reps": "9"
+        },
+        {
+          "kg": "31,8",
+          "reps": "9"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d2_C__log1": {
+      "sets": [
+        {
+          "kg": "7,5",
+          "reps": "10"
+        },
+        {
+          "kg": "10",
+          "reps": "8"
+        },
+        {
+          "kg": "10",
+          "reps": "8"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d2_C__log3": {
+      "sets": [
+        {
+          "kg": "59",
+          "reps": "12"
+        },
+        {
+          "kg": "59",
+          "reps": "12"
+        },
+        {
+          "kg": "59",
+          "reps": "12"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d2_C__log2": {
+      "sets": [
+        {
+          "kg": "27",
+          "reps": "15"
+        },
+        {
+          "kg": "27",
+          "reps": "15"
+        },
+        {
+          "kg": "27",
+          "reps": "15"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d2_C__log0": {
+      "sets": [
+        {
+          "kg": "60",
+          "reps": "12"
+        },
+        {
+          "kg": "60",
+          "reps": "12"
+        },
+        {
+          "kg": "60",
+          "reps": "12"
+        }
+      ],
+      "comment": "",
+      "kneeSensation": null
     }
   },
   "videos": {
@@ -65,5 +181,7 @@
     "calentamiento__core3": "https://youtube.com/shorts/xa1MqX6sR40?feature=share",
     "Nuevo ejercicio": ""
   },
-  "sessionDone": {}
+  "sessionDone": {
+    "w1_d2__done": true
+  }
 }
