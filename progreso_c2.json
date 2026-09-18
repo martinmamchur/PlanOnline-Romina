@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-09-18T02:13:46.299Z",
+  "exportedAt": "2026-09-18T02:14:09.345Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -185,6 +185,7 @@
     "Nuevo ejercicio": ""
   },
   "sessionDone": {
-    "w1_d2__done": true
+    "w1_d2__done": true,
+    "w1_d3__done": true
   }
 }
