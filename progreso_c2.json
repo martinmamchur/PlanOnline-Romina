@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-09-20T23:57:09.886Z",
+  "exportedAt": "2026-09-21T00:12:29.045Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -257,6 +257,16 @@
         }
       ],
       "comment": "",
+      "kneeSensation": null
+    },
+    "w1_d1_C__log0": {
+      "sets": [
+        {
+          "kg": "",
+          "reps": "4"
+        }
+      ],
+      "comment": "4 vueltas justas, al cajón subi pero sin salto",
       "kneeSensation": null
     }
   },
