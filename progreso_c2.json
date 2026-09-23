@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-09-23T01:20:00.545Z",
+  "exportedAt": "2026-09-23T01:27:49.688Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -268,6 +268,16 @@
       ],
       "comment": "4 vueltas justas, al cajÃ³n subi pero sin salto y los push up los hago apoyando rodillas",
       "kneeSensation": null
+    },
+    "w2_d3_B__log0": {
+      "sets": [
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "kneeSensation": null,
+      "comment": "35 mib"
     }
   },
   "videos": {
