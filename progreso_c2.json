@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-15T00:23:26.894Z",
+  "exportedAt": "2026-10-15T00:28:53.217Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -502,6 +502,12 @@
       ],
       "comment": "",
       "kneeSensation": null
+    },
+    "w4_d0_WU_core3__done": {
+      "done": true
+    },
+    "w4_d0_WU_core1__done": {
+      "done": true
     }
   },
   "videos": {
