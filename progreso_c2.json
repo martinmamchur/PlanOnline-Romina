@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-15T01:08:59.211Z",
+  "exportedAt": "2026-10-15T01:09:06.535Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -560,6 +560,24 @@
         }
       ],
       "comment": "baje un poco el peso xq me costó esta semana",
+      "kneeSensation": null
+    },
+    "w4_d0_C__log0": {
+      "sets": [
+        {
+          "kg": "5",
+          "reps": "9"
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "comment": "",
       "kneeSensation": null
     }
   },
