@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-15T01:23:27.954Z",
+  "exportedAt": "2026-10-15T01:23:34.135Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -588,10 +588,10 @@
         },
         {
           "kg": "5",
-          "reps": ""
+          "reps": "15"
         },
         {
-          "kg": "",
+          "kg": "5",
           "reps": ""
         }
       ],
