@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-15T01:13:08.476Z",
+  "exportedAt": "2026-10-15T01:14:19.585Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -569,15 +569,15 @@
           "reps": "9"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "5",
+          "reps": "8"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "5",
+          "reps": "8"
         }
       ],
-      "comment": "",
+      "comment": "me re cuesta este ejercicio",
       "kneeSensation": null
     }
   },
