@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-17T22:37:29.292Z",
+  "exportedAt": "2026-10-17T22:37:43.429Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -727,16 +727,16 @@
           "reps": "40"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "8",
+          "reps": "40"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "8",
+          "reps": "40"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "8",
+          "reps": "40"
         }
       ],
       "comment": "",
@@ -812,6 +812,7 @@
     "w3_d3__done": true,
     "w3_d2__done": true,
     "w4_d0__done": true,
-    "w4_d3__done": true
+    "w4_d3__done": true,
+    "w4_d2__done": true
   }
 }
