@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-10-17T22:06:45.685Z",
+  "exportedAt": "2026-10-17T22:07:52.311Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -677,8 +677,8 @@
           "reps": "12"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "7,5",
+          "reps": "12"
         }
       ],
       "comment": "no hay mancuernas de 10 kg, por eso hago mas reps",
