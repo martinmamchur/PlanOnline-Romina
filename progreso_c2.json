@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-11-01T21:06:14.148Z",
+  "exportedAt": "2026-11-01T21:06:38.397Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -790,6 +790,28 @@
         }
       ],
       "comment": "en el set activador hice 8, descanso casi 2 minutos. se siente mucho mas que antes.",
+      "kneeSensation": null
+    },
+    "w5_d2_B__log1": {
+      "sets": [
+        {
+          "kg": "18",
+          "reps": "8"
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "comment": "jalon supino",
       "kneeSensation": null
     }
   },
