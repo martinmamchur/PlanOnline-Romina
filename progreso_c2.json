@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-11-01T21:35:31.042Z",
+  "exportedAt": "2026-11-01T21:36:46.134Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -862,7 +862,7 @@
         },
         {
           "kg": "49",
-          "reps": ""
+          "reps": "20"
         }
       ],
       "comment": "las 8 restantes las hago con 40",
@@ -940,6 +940,7 @@
     "w4_d0__done": true,
     "w4_d3__done": true,
     "w4_d2__done": true,
-    "w5_d3__done": true
+    "w5_d3__done": true,
+    "w5_d2__done": true
   }
 }
