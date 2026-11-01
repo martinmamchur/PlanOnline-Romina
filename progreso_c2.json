@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-11-01T21:00:40.118Z",
+  "exportedAt": "2026-11-01T21:01:47.078Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -786,7 +786,7 @@
         },
         {
           "kg": "60",
-          "reps": ""
+          "reps": "20"
         }
       ],
       "comment": "en el set activador hice 8, descanso casi 2 minutos. se siente mucho mas que antes.",
