@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-11-01T21:08:49.082Z",
+  "exportedAt": "2026-11-01T21:14:37.459Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -799,16 +799,16 @@
           "reps": "8"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "22",
+          "reps": "8"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "22",
+          "reps": "8"
         },
         {
-          "kg": "",
-          "reps": ""
+          "kg": "22",
+          "reps": "8"
         }
       ],
       "comment": "jalon supino",
