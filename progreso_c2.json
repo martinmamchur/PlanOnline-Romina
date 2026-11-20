@@ -1,6 +1,6 @@
 {
   "app": "plan-romina-ceo-c2",
-  "exportedAt": "2026-11-20T01:05:45.493Z",
+  "exportedAt": "2026-11-20T01:06:19.634Z",
   "planStart": "",
   "logData": {
     "w1_d0_WU_mov1__done": {
@@ -1000,6 +1000,28 @@
         }
       ],
       "comment": "bajo a 50",
+      "kneeSensation": null
+    },
+    "w7_d2_B__log1": {
+      "sets": [
+        {
+          "kg": "27",
+          "reps": "8"
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        },
+        {
+          "kg": "",
+          "reps": ""
+        }
+      ],
+      "comment": "jalon supino",
       "kneeSensation": null
     }
   },
